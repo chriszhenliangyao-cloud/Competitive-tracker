@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Charger Dashboard — PREVIEW (sample data)</title>
+<style>
+  :root { --bg:#f7f8fa; --panel:#ffffff; --panel2:#f1f3f7; --text:#1d2230; --muted:#6b7280; --accent:#2563eb; --promo:#dc2626; --ok:#059669; --border:#e2e6ee; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  .preview-banner { background:#fef3c7; color:#92400e; font-size:12px; text-align:center; padding:6px 12px; border-bottom:1px solid #fcd34d; }
+  header { padding:14px 22px; background:linear-gradient(135deg,#ffffff,#eef2f9); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; }
+  h1 { margin:0 0 2px; font-size:19px; }
+  .sub { color:var(--muted); font-size:12px; }
+  .layout { display:flex; min-height:calc(100vh - 90px); }
+  aside { width:280px; padding:16px; background:var(--panel); border-right:1px solid var(--border); overflow-y:auto; }
+  main { flex:1; padding:18px 22px; overflow-y:auto; }
+  .filter { margin-bottom:14px; }
+  .filter label { display:block; font-weight:600; color:#374151; margin-bottom:6px; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  .check-list { max-height:160px; overflow-y:auto; background:var(--panel2); border:1px solid var(--border); border-radius:6px; padding:6px 8px; }
+  .check-list label { display:flex; align-items:center; gap:6px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--text); padding:2px 0; cursor:pointer; }
+  .check-list input { margin:0; }
+  .check-list label.dim { opacity:0.35; }
+  input[type=text], input[type=number] { width:100%; padding:6px 8px; background:var(--panel2); border:1px solid var(--border); color:var(--text); border-radius:6px; }
+  .range-row { display:flex; gap:6px; align-items:center; }
+  .range-row input { flex:1; }
+  .toggle { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .pill { display:inline-block; padding:2px 6px; border-radius:10px; background:var(--panel2); border:1px solid var(--border); color:var(--muted); font-size:11px; margin-right:4px; }
+  .pill.promo { background:rgba(220,38,38,0.08); color:var(--promo); border-color:rgba(220,38,38,0.3); }
+  .pill.ok { background:rgba(5,150,105,0.08); color:var(--ok); border-color:rgba(5,150,105,0.3); }
+  .pill.down { color:var(--ok); }
+  .pill.up { color:var(--promo); }
+  .retailer-section { margin-bottom:32px; }
+  .retailer-head { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--panel); border:1px solid var(--border); border-radius:10px 10px 0 0; }
+  .retailer-head h2 { margin:0; font-size:16px; }
+  .retailer-head .flag { font-size:18px; margin-right:6px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; padding:12px; background:var(--panel); border:1px solid var(--border); border-top:none; border-radius:0 0 10px 10px; }
+  .card { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:6px; font-size:12.5px; box-shadow:0 1px 2px rgba(15,23,42,0.04); }
+  .card:hover { box-shadow:0 4px 12px rgba(15,23,42,0.08); }
+  .card .imgwrap { width:100%; height:120px; background:#fff; border:1px solid var(--border); border-radius:6px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .card .ph { color:#c4c9d4; font-size:30px; }
+  .brand { font-weight:700; color:#374151; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; }
+  .pname { font-size:12.5px; line-height:1.3; min-height:34px; }
+  .sku { color:var(--muted); font-size:10.5px; font-family:ui-monospace, monospace; }
+  .price-row { display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin-top:auto; }
+  .price-eur { font-weight:700; font-size:15px; }
+  .price-native { color:var(--muted); font-size:11px; }
+  .promo-strike { text-decoration:line-through; color:var(--muted); font-size:11px; }
+  .meta { color:var(--muted); font-size:11px; }
+  a.go { color:var(--accent); text-decoration:none; font-size:11px; }
+  a.go:hover { text-decoration:underline; }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+  #summary { color:var(--muted); font-size:12px; margin-bottom:8px; }
+  button { padding:8px 14px; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; }
+  button.secondary, button.reset { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+  #cat-tabs button { padding:6px 12px; }
+  #userbox { font-size:12px; color:var(--muted); display:flex; gap:10px; align-items:center; }
+</style>
+</head>
+<body>
+<div class="preview-banner">⚠ 预览版（样例数据，非真实抓取结果）· 真实版需登录 + 读取 Supabase v_dashboard · 用于确认看板外观</div>
+<header>
+  <div>
+    <h1>Competitive Tracker</h1>
+    <div class="sub" id="subline">loading…</div>
+  </div>
+  <div id="cat-tabs" style="display:flex;gap:6px">
+    <button data-cat="charger">Chargers</button>
+    <button class="secondary" data-cat="powerbank">Power Banks</button>
+  </div>
+  <div id="userbox">
+    <a href="#" id="review-link" style="color:var(--accent);font-size:12px;text-decoration:none">Review (3)</a>
+    <span id="who">you@example.com</span><button class="secondary">退出</button>
+  </div>
+</header>
+<div class="layout">
+<aside>
+  <div class="filter"><label>Search</label><input type="text" id="f-search" placeholder="product name…"></div>
+  <div class="filter"><label>Retailer</label><div class="check-list" id="f-retailer"></div></div>
+  <div class="filter"><label>Brand</label><div class="check-list" id="f-brand"></div></div>
+  <div class="filter"><label>Country</label><div class="check-list" id="f-country"></div></div>
+  <div class="filter"><label>Price (EUR)</label>
+    <div class="range-row"><input type="number" id="f-price-min" placeholder="min"><span>–</span><input type="number" id="f-price-max" placeholder="max"></div>
+  </div>
+  <div class="filter"><label>Power (W)</label>
+    <div class="range-row"><input type="number" id="f-power-min" placeholder="min"><span>–</span><input type="number" id="f-power-max" placeholder="max"></div>
+  </div>
+  <div class="filter"><label>Min USB ports</label><input type="number" id="f-ports-min" placeholder="0" min="0"></div>
+  <div class="filter"><label>Seller type</label><div class="check-list" id="f-seller"></div></div>
+  <div class="filter"><label class="toggle"><input type="checkbox" id="f-instock"> In stock only</label></div>
+  <div class="filter"><label class="toggle"><input type="checkbox" id="f-wireless"> Wireless only</label></div>
+  <div class="filter"><label class="toggle"><input type="checkbox" id="f-promo"> Has promo</label></div>
+  <button class="reset" id="reset">Reset filters</button>
+</aside>
+<main>
+  <div id="summary"></div>
+  <div id="results"></div>
+</main>
+</div>
+
+<script>
+const COUNTRY_FLAG = { FR:"🇫🇷", PL:"🇵🇱", ES:"🇪🇸", NL:"🇳🇱", DE:"🇩🇪" };
+const FX = { EUR:1, PLN:0.235 };
+
+// ===== 样例数据：字段与 Supabase v_dashboard 完全一致 =====
+const SAMPLE = [
+  // Fnac (FR)
+  {retailer:"Fnac",country:"FR",brand:"Anker",name:"Anker 735 Charger (Nano II 65W)",sku:"A2663",ean:"0194644092337",power:"65W",power_w:65,usb_ports:"USB-C×2, USB-A×1",port_count:3,is_wireless:false,price:59.99,promo_price:49.99,prev_price:54.99,prev_promo:54.99,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"Fnac",country:"FR",brand:"Anker",name:"Anker 511 Charger (Nano 3, 30W)",sku:"A2147",ean:"0194644104429",power:"30W",power_w:30,usb_ports:"USB-C×1",port_count:1,is_wireless:false,price:24.99,promo_price:null,prev_price:24.99,prev_promo:null,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"Fnac",country:"FR",brand:"Belkin",name:"Belkin BoostCharge Pro 3-Port GaN 65W",sku:"WCH013",ean:"0745883847921",power:"65W",power_w:65,usb_ports:"USB-C×2, USB-A×1",port_count:3,is_wireless:false,price:64.99,promo_price:null,prev_price:69.99,prev_promo:null,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"Fnac",country:"FR",brand:"UGREEN",name:"UGREEN Nexode 100W 4-Port GaN",sku:"CD226",ean:"6957303887729",power:"100W",power_w:100,usb_ports:"USB-C×3, USB-A×1",port_count:4,is_wireless:false,price:89.99,promo_price:74.99,prev_price:89.99,prev_promo:79.99,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  // Boulanger (FR)
+  {retailer:"Boulanger",country:"FR",brand:"Belkin",name:"Belkin 2-Port Wall Charger 37W",sku:"WCB007",ean:"0745883831234",power:"37W",power_w:37,usb_ports:"USB-C×1, USB-A×1",port_count:2,is_wireless:false,price:34.99,promo_price:null,prev_price:34.99,prev_promo:null,currency:"EUR",in_stock:false,seller:"Self",url:"#"},
+  {retailer:"Boulanger",country:"FR",brand:"Anker",name:"Anker Prime 67W (3-Port GaN)",sku:"A2667",ean:"0194644135522",power:"67W",power_w:67,usb_ports:"USB-C×2, USB-A×1",port_count:3,is_wireless:false,price:69.99,promo_price:null,prev_price:69.99,prev_promo:null,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"Boulanger",country:"FR",brand:"Baseus",name:"Baseus GaN5 Pro 65W Wall Charger",sku:"CCGP120201",ean:"6932172612345",power:"65W",power_w:65,usb_ports:"USB-C×2, USB-A×1",port_count:3,is_wireless:false,price:44.99,promo_price:39.99,prev_price:44.99,prev_promo:44.99,currency:"EUR",in_stock:true,seller:"Marketplace (TechWorld)",url:"#"},
+  // MediaExpert (PL) — PLN，看板自动换 EUR
+  {retailer:"MediaExpert",country:"PL",brand:"Anker",name:"Anker 735 Charger Nano II 65W",sku:"A2663",ean:"0194644092337",power:"65W",power_w:65,usb_ports:"USB-C×2, USB-A×1",port_count:3,is_wireless:false,price:269,promo_price:229,prev_price:249,prev_promo:249,currency:"PLN",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"MediaExpert",country:"PL",brand:"UGREEN",name:"UGREEN Nexode 100W GaN",sku:"CD226",ean:"6957303887729",power:"100W",power_w:100,usb_ports:"USB-C×3, USB-A×1",port_count:4,is_wireless:false,price:379,promo_price:null,prev_price:379,prev_promo:null,currency:"PLN",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"MediaExpert",country:"PL",brand:"Isy",name:"ISY Wall Charger 20W USB-C",sku:"IWC-4000",ean:"4061474123456",power:"20W",power_w:20,usb_ports:"USB-C×1",port_count:1,is_wireless:false,price:49,promo_price:null,prev_price:49,prev_promo:null,currency:"PLN",in_stock:true,seller:"Self",url:"#"},
+  // Coolblue (NL)
+  {retailer:"Coolblue",country:"NL",brand:"Anker",name:"Anker 711 Charger (Nano 30W)",sku:"A2147",ean:"0194644104429",power:"30W",power_w:30,usb_ports:"USB-C×1",port_count:1,is_wireless:false,price:22.99,promo_price:null,prev_price:22.99,prev_promo:null,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"Coolblue",country:"NL",brand:"Belkin",name:"Belkin BoostCharge 30W USB-C",sku:"WCA005",ean:"0745883820011",power:"30W",power_w:30,usb_ports:"USB-C×1",port_count:1,is_wireless:false,price:29.99,promo_price:null,prev_price:27.99,prev_promo:null,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"Coolblue",country:"NL",brand:"UGREEN",name:"UGREEN 45W 2-Port USB-C",sku:"CD294",ean:"6957303888112",power:"45W",power_w:45,usb_ports:"USB-C×2",port_count:2,is_wireless:false,price:27.99,promo_price:null,prev_price:27.99,prev_promo:null,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  // PCComponentes (ES)
+  {retailer:"PCComponentes",country:"ES",brand:"Anker",name:"Anker Prime 100W Desktop Charger",sku:"A2343",ean:"0194644135899",power:"100W",power_w:100,usb_ports:"USB-C×3, USB-A×1",port_count:4,is_wireless:false,price:99.99,promo_price:84.99,prev_price:99.99,prev_promo:89.99,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"PCComponentes",country:"ES",brand:"Baseus",name:"Baseus 30W Wall Charger USB-C",sku:"CCGN070201",ean:"6932172609988",power:"30W",power_w:30,usb_ports:"USB-C×1",port_count:1,is_wireless:false,price:19.99,promo_price:null,prev_price:19.99,prev_promo:null,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+  {retailer:"PCComponentes",country:"ES",brand:"Belkin",name:"Belkin BoostCharge MagSafe Wireless Pad 15W",sku:"WIA004",ean:"0745883844456",power:"15W",power_w:15,usb_ports:"Wireless (MagSafe)",port_count:0,is_wireless:true,price:44.99,promo_price:null,prev_price:49.99,prev_promo:null,currency:"EUR",in_stock:true,seller:"Self",url:"#"},
+];
+
+const $ = id => document.getElementById(id);
+let ROWS = [];
+
+function load(){
+  ROWS = SAMPLE.map(r=>{
+    const toEUR = v => (v==null?null:+(v*(FX[r.currency]||1)).toFixed(2));
+    const price_eur=toEUR(r.price), promo_eur=toEUR(r.promo_price);
+    return {...r, price_eur, promo_eur,
+      effective_eur: promo_eur!=null?promo_eur:price_eur,
+      prev_eur: toEUR(r.prev_promo!=null?r.prev_promo:r.prev_price),
+      wireless:!!r.is_wireless, ports:r.port_count||0};
+  });
+  $("subline").textContent =
+    `${ROWS.length} products · ${new Set(ROWS.map(r=>r.brand)).size} brands · `+
+    `${new Set(ROWS.map(r=>r.retailer)).size} retailers · latest scrape 2026-06-12 · 1 PLN = ${FX.PLN.toFixed(4)} EUR`;
+  buildFilters(); render();
+}
+function uniq(a){ return Array.from(new Set(a)).filter(Boolean).sort(); }
+function mkChecklist(id,values){ $(id).innerHTML = values.map(v=>`<label><input type="checkbox" value="${v.replace(/"/g,'&quot;')}">${v}</label>`).join(""); }
+function buildFilters(){
+  mkChecklist("f-retailer", uniq(ROWS.map(r=>r.retailer)));
+  mkChecklist("f-brand",    uniq(ROWS.map(r=>r.brand)));
+  mkChecklist("f-country",  uniq(ROWS.map(r=>r.country)));
+  mkChecklist("f-seller",   uniq(ROWS.map(r=>r.seller)));
+  document.querySelectorAll("aside input").forEach(el=>{ el.oninput=render; el.onchange=render; });
+  $("reset").onclick=()=>{ document.querySelectorAll("aside input[type=checkbox]").forEach(e=>e.checked=false);
+    document.querySelectorAll("aside input[type=number], aside input[type=text]").forEach(e=>e.value=""); render(); };
+}
+function checkedValues(id){ return Array.from(document.querySelectorAll(`#${id} input:checked`)).map(e=>e.value); }
+function getState(){ return {
+  search:($("f-search").value||"").toLowerCase().trim(),
+  retailers:checkedValues("f-retailer"), brands:checkedValues("f-brand"),
+  countries:checkedValues("f-country"), sellers:checkedValues("f-seller"),
+  pmin:parseFloat($("f-price-min").value), pmax:parseFloat($("f-price-max").value),
+  wmin:parseFloat($("f-power-min").value), wmax:parseFloat($("f-power-max").value),
+  portMin:parseFloat($("f-ports-min").value),
+  inStock:$("f-instock").checked, wireless:$("f-wireless").checked, promoOnly:$("f-promo").checked }; }
+function rowMatches(r,s,skip){
+  if (s.search && !(r.name||"").toLowerCase().includes(s.search) && !(r.sku||"").toLowerCase().includes(s.search)) return false;
+  if (skip!=="retailer" && s.retailers.length && !s.retailers.includes(r.retailer)) return false;
+  if (skip!=="brand" && s.brands.length && !s.brands.includes(r.brand)) return false;
+  if (skip!=="country" && s.countries.length && !s.countries.includes(r.country)) return false;
+  if (skip!=="seller" && s.sellers.length && !s.sellers.includes(r.seller)) return false;
+  const p=r.effective_eur;
+  if (!isNaN(s.pmin) && (p==null||p<s.pmin)) return false;
+  if (!isNaN(s.pmax) && (p==null||p>s.pmax)) return false;
+  if (!isNaN(s.wmin) && (r.power_w==null||r.power_w<s.wmin)) return false;
+  if (!isNaN(s.wmax) && (r.power_w==null||r.power_w>s.wmax)) return false;
+  if (!isNaN(s.portMin) && (r.ports||0)<s.portMin) return false;
+  if (s.inStock && !r.in_stock) return false;
+  if (s.wireless && !r.wireless) return false;
+  if (s.promoOnly && r.promo_price==null) return false;
+  return true;
+}
+function refreshCascade(s){
+  for (const [key,id] of [["retailer","f-retailer"],["brand","f-brand"],["country","f-country"],["seller","f-seller"]]) {
+    const reach=new Set();
+    for (const r of ROWS) if (rowMatches(r,s,key)) reach.add(r[key]);
+    document.querySelectorAll(`#${id} label`).forEach(lab=>{
+      const inp=lab.querySelector("input"); const ok=inp.checked||reach.has(inp.value);
+      lab.classList.toggle("dim",!ok); inp.disabled=!ok&&!inp.checked; });
+  }
+}
+const esc = s => (s||"").replace(/[&<>"]/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const fmtP = v => v==null ? "—" : v.toFixed(2)+" €";
+function cardHTML(r){
+  const delta = (r.prev_eur!=null && r.effective_eur!=null && r.prev_eur!==r.effective_eur)
+    ? `<span class="pill ${r.effective_eur<r.prev_eur?'down':'up'}">${r.effective_eur<r.prev_eur?'▼':'▲'} ${Math.abs(r.effective_eur-r.prev_eur).toFixed(2)}€</span>` : "";
+  const priceLine = r.promo_eur!=null
+    ? `<span class="price-eur">${fmtP(r.promo_eur)}</span> <span class="promo-strike">${fmtP(r.price_eur)}</span>`
+    : `<span class="price-eur">${fmtP(r.price_eur)}</span>`;
+  const native = r.currency!=="EUR" && (r.promo_price??r.price)!=null
+    ? `<div class="price-native">${(r.promo_price??r.price).toFixed(2)} ${r.currency}</div>` : "";
+  return `<div class="card">
+    <div class="imgwrap"><span class="ph">⚡</span></div>
+    <div class="brand">${esc(r.brand)}</div>
+    <div class="pname">${esc(r.name)}</div>
+    <div class="sku">${esc(r.sku||"")}${r.ean?" · "+esc(r.ean):""}</div>
+    <div class="meta">${esc(r.power||"?W")} · ${esc(r.usb_ports||"—")}</div>
+    <div>${r.in_stock?'<span class="pill ok">in stock</span>':'<span class="pill">out</span>'}${r.promo_price!=null?'<span class="pill promo">PROMO</span>':''}${r.wireless?'<span class="pill">wireless</span>':''}<span class="pill">${esc(r.seller||"?")}</span>${delta}</div>
+    <div class="price-row">${priceLine}</div>${native}
+    <a class="go" href="${esc(r.url)}" target="_blank" rel="noopener">View on ${esc(r.retailer)} →</a>
+  </div>`;
+}
+function render(){
+  const s=getState(); refreshCascade(s);
+  const filtered=ROWS.filter(r=>rowMatches(r,s,null));
+  const by={}; for (const r of filtered) (by[r.retailer]=by[r.retailer]||[]).push(r);
+  const names=Object.keys(by).sort();
+  $("summary").textContent=`Showing ${filtered.length} of ${ROWS.length} products across ${names.length} retailers`;
+  $("results").innerHTML = !filtered.length
+    ? '<div class="empty">No products match the current filters.</div>'
+    : names.map(n=>{ const items=by[n], c=items[0].country, flag=COUNTRY_FLAG[c]||"";
+        return `<section class="retailer-section">
+          <div class="retailer-head"><h2><span class="flag">${flag}</span>${esc(n)} <span class="meta">· ${c}</span></h2><div class="meta">${items.length} products</div></div>
+          <div class="grid">${items.map(cardHTML).join("")}</div></section>`; }).join("");
+}
+// 品类标签：powerbank 在预览里给空态提示
+$("cat-tabs").querySelectorAll("button").forEach(btn=>btn.onclick=()=>{
+  $("cat-tabs").querySelectorAll("button").forEach(b=>b.className=b===btn?"":"secondary");
+  if (btn.dataset.cat==="powerbank"){ $("subline").textContent="powerbank 预览暂留本地 Flask 看板（本轮只做 charger 上云）";
+    $("summary").textContent=""; $("results").innerHTML='<div class="empty">Power Banks 板块本轮未上云。</div>'; }
+  else load();
+});
+load();
+</script>
+</body>
+</html>

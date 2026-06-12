@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapping Review — Competitive Tracker</title>
+<style>
+  :root { --bg:#f7f8fa; --panel:#ffffff; --panel2:#f1f3f7; --text:#1d2230; --muted:#6b7280; --accent:#2563eb; --promo:#dc2626; --ok:#059669; --border:#e2e6ee; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:14px 22px; background:linear-gradient(135deg,#ffffff,#eef2f9); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  h1 { margin:0; font-size:18px; }
+  .sub { color:var(--muted); font-size:12px; }
+  main { padding:18px 22px; max-width:1200px; margin:0 auto; }
+  .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  select, input[type=text] { padding:7px 9px; background:var(--panel); border:1px solid var(--border); border-radius:6px; font-size:13px; }
+  .row { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; display:grid; grid-template-columns: 1fr 320px; gap:16px; }
+  .row.done { opacity:0.45; }
+  .info .name { font-weight:600; margin-bottom:4px; }
+  .meta { color:var(--muted); font-size:12px; margin-bottom:2px; }
+  .meta b { color:var(--text); font-weight:600; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:10px; background:var(--panel2); border:1px solid var(--border); color:var(--muted); font-size:11px; margin-right:5px; }
+  a { color:var(--accent); font-size:12px; }
+  .actions { display:flex; flex-direction:column; gap:8px; }
+  .actions input { width:100%; }
+  .btnrow { display:flex; gap:8px; }
+  button { padding:7px 12px; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; }
+  button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+  button:disabled { opacity:0.5; cursor:not-allowed; }
+  .hint { font-size:11px; color:var(--muted); }
+  .status-msg { font-size:12px; min-height:14px; }
+  .status-msg.err { color:var(--promo); } .status-msg.ok { color:var(--ok); }
+  .suggest { font-size:12px; background:var(--panel2); border:1px dashed var(--border); border-radius:6px; padding:6px 8px; cursor:pointer; }
+  .suggest:hover { border-color:var(--accent); }
+  .empty { padding:60px; text-align:center; color:var(--muted); }
+  #gate { min-height:100vh; display:flex; align-items:center; justify-content:center; color:var(--muted); }
+</style>
+</head>
+<body>
+<div id="gate">检查登录状态…</div>
+
+<div id="app" style="display:none">
+<header>
+  <div>
+    <h1>Mapping Review</h1>
+    <div class="sub">New Listing 人工审核 · 填厂商 SKU 或跳过 · 直接写库，无审核文件</div>
+  </div>
+  <div><a href="index.html">← 返回看板</a></div>
+</header>
+<main>
+  <div class="toolbar">
+    <select id="f-cat"></select>
+    <select id="f-brand"><option value="">所有品牌</option></select>
+    <select id="f-retailer"><option value="">所有渠道</option></select>
+    <input type="text" id="f-search" placeholder="搜标题/EAN…">
+    <span class="sub" id="count"></span>
+  </div>
+  <div id="list"></div>
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const CFG = window.CHARGER_CONFIG;
+const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY);
+const $ = id => document.getElementById(id);
+let ROWS = [], BRAND_IDS = {}, CAT_IDS = {}, PRODUCTS = [], USER_EMAIL = "";
+
+async function boot() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) { location.href = "index.html"; return; }
+  const { data: allowed } = await sb.rpc("is_allowed");
+  if (!allowed) { location.href = "index.html"; return; }
+  USER_EMAIL = data.session.user.email;
+  $("gate").style.display = "none"; $("app").style.display = "";
+
+  const [{ data: cats }, { data: brands }] = await Promise.all([
+    sb.from("categories").select("id,key,display"),
+    sb.from("brands").select("id,key,display"),
+  ]);
+  (cats||[]).forEach(c => CAT_IDS[c.key] = c.id);
+  (brands||[]).forEach(b => BRAND_IDS[b.key] = b.id);
+  $("f-cat").innerHTML = (cats||[]).map(c =>
+    `<option value="${c.key}">${c.display}</option>`).join("");
+  $("f-cat").value = localStorage.getItem("cat") || "charger";
+  $("f-cat").onchange = load; $("f-brand").onchange = render;
+  $("f-retailer").onchange = render; $("f-search").oninput = render;
+  await load();
+}
+
+async function load() {
+  const cat = $("f-cat").value;
+  const [{ data: rows, error }, { data: prods }] = await Promise.all([
+    sb.from("v_review").select("*").eq("category", cat).limit(2000),
+    sb.from("products").select("id,brand_id,sku,name,ean").eq("category_id", CAT_IDS[cat]).limit(5000),
+  ]);
+  if (error) { $("list").innerHTML = `<div class="empty">加载失败: ${error.message}</div>`; return; }
+  ROWS = rows || []; PRODUCTS = prods || [];
+  const opts = (vals, el) => { el.innerHTML = el.options[0].outerHTML +
+    [...new Set(vals)].sort().map(v=>`<option>${v}</option>`).join(""); };
+  opts(ROWS.map(r=>r.brand_display), $("f-brand"));
+  opts(ROWS.map(r=>r.retailer_display), $("f-retailer"));
+  render();
+}
+
+const esc = s => (s||"").replace(/[&<>"]/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+function render() {
+  const fb = $("f-brand").value, fr = $("f-retailer").value,
+        q = ($("f-search").value||"").toLowerCase();
+  const rows = ROWS.filter(r =>
+    (!fb || r.brand_display===fb) && (!fr || r.retailer_display===fr) &&
+    (!q || (r.raw_name||"").toLowerCase().includes(q) || (r.raw_ean||"").includes(q)));
+  $("count").textContent = `${rows.length} 条待审核`;
+  if (!rows.length) { $("list").innerHTML = '<div class="empty">没有待审核的 New Listing 🎉</div>'; return; }
+  $("list").innerHTML = rows.map(r => {
+    // EAN 对账建议：raw_ean 命中产品库则提示一键采用
+    const hit = r.raw_ean ? PRODUCTS.find(p =>
+      p.ean === r.raw_ean && p.brand_id === BRAND_IDS[r.brand]) : null;
+    return `<div class="row" id="row-${r.listing_id}">
+      <div class="info">
+        <div class="name">${esc(r.raw_name) || "<i>无标题</i>"}</div>
+        <div class="meta"><b>${esc(r.brand_display)}</b> · ${esc(r.retailer_display)} (${esc(r.country)}) · 渠道码 <b>${esc(r.retailer_code)}</b></div>
+        <div class="meta">EAN: ${esc(r.raw_ean)||"—"} · 抓到的SKU: ${esc(r.raw_sku)||"—"} · 价格: ${r.price!=null?r.price+" "+esc(r.currency):"—"} ${r.promo_price!=null?'<span class="pill">promo '+r.promo_price+'</span>':''}</div>
+        <div class="meta"><span class="pill">${esc(r.seller)||"?"}</span>首见 ${esc(r.first_seen)} · <a href="${esc(r.url)}" target="_blank" rel="noopener">打开商品页 ↗</a></div>
+        ${hit ? `<div class="suggest" onclick="useSku(${r.listing_id}, '${esc(hit.sku)}')">💡 EAN 命中产品库：<b>${esc(hit.sku)}</b> — ${esc(hit.name)}（点击采用）</div>` : ""}
+      </div>
+      <div class="actions">
+        <input type="text" id="sku-${r.listing_id}" placeholder="厂商 SKU（产品库没有则自动建档）" list="skus-${r.listing_id}">
+        <datalist id="skus-${r.listing_id}">${PRODUCTS.filter(p=>p.brand_id===BRAND_IDS[r.brand]).map(p=>`<option value="${esc(p.sku)}">${esc(p.name)}</option>`).join("")}</datalist>
+        <div class="btnrow">
+          <button onclick="confirmMap(${r.listing_id})">确认映射</button>
+          <button class="secondary" onclick="skipRow(${r.listing_id})">Skip（非目标品）</button>
+        </div>
+        <div class="hint">SKU = 产品身份；不确定就打开商品页核对，不要猜</div>
+        <div class="status-msg" id="msg-${r.listing_id}"></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+window.useSku = (lid, sku) => { $("sku-"+lid).value = sku; };
+
+window.confirmMap = async (lid) => {
+  const r = ROWS.find(x => x.listing_id === lid);
+  const sku = ($("sku-"+lid).value || "").trim();
+  const m = $("msg-"+lid);
+  if (!sku) { m.textContent = "请填 SKU"; m.className = "status-msg err"; return; }
+  m.textContent = "提交中…"; m.className = "status-msg";
+
+  // 1) 产品库找 / 建
+  let prod = PRODUCTS.find(p => p.brand_id === BRAND_IDS[r.brand] &&
+                                p.sku.toUpperCase() === sku.toUpperCase());
+  if (!prod) {
+    const { data, error } = await sb.from("products").insert({
+      category_id: CAT_IDS[r.category], brand_id: BRAND_IDS[r.brand],
+      sku, name: r.raw_name || sku, ean: r.raw_ean || null,
+    }).select("id,brand_id,sku,name,ean").single();
+    if (error) { m.textContent = "建档失败: "+error.message; m.className="status-msg err"; return; }
+    prod = data; PRODUCTS.push(prod);
+  }
+  // 2) listing 落映射 + 审计
+  const { error: e2 } = await sb.from("listings").update({
+    product_id: prod.id, status: "mapped", mapping_method: "manual_review",
+    reviewed_by: USER_EMAIL, reviewed_at: new Date().toISOString(),
+  }).eq("id", lid);
+  if (e2) { m.textContent = "更新失败: "+e2.message; m.className="status-msg err"; return; }
+  m.textContent = "✓ 已映射到 " + prod.sku; m.className = "status-msg ok";
+  $("row-"+lid).classList.add("done");
+};
+
+window.skipRow = async (lid) => {
+  const m = $("msg-"+lid);
+  const { error } = await sb.from("listings").update({
+    status: "skip", reviewed_by: USER_EMAIL, reviewed_at: new Date().toISOString(),
+  }).eq("id", lid);
+  if (error) { m.textContent = "失败: "+error.message; m.className="status-msg err"; return; }
+  m.textContent = "已跳过"; m.className = "status-msg ok";
+  $("row-"+lid).classList.add("done");
+};
+
+boot();
+</script>
+</body>
+</html>
