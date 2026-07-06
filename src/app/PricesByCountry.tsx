@@ -4,35 +4,39 @@ import { useMemo, useState } from "react";
 import Thumb from "@/components/Thumb";
 import Sparkline from "@/components/Sparkline";
 import { COUNTRY_NAMES, fmtEUR, fmtMoney, titleCase } from "@/lib/format";
-import type { Competitor } from "./iniu/IniuTable";
+import type { Competitor, PriceRow } from "./iniu/IniuTable";
 
-export type Prod = { id: number; name: string; sku: string };
+export type Prod = { id: number; name: string; sku: string; image_url: string | null };
 
 export default function PricesByCountry({
   products,
   compByIniu,
+  ownByIniu,
 }: {
   products: Prod[];
   compByIniu: Record<number, Competitor[]>;
+  ownByIniu: Record<number, PriceRow[]>;
 }) {
   const [country, setCountry] = useState("");
   const [product, setProduct] = useState(""); // "" = show all
 
   const countries = useMemo(() => {
     const s = new Set<string>();
-    Object.values(compByIniu).forEach((cs) =>
-      cs.forEach((c) => c.priceRows.forEach((r) => r.country && s.add(r.country))),
-    );
+    Object.values(compByIniu).forEach((cs) => cs.forEach((c) => c.priceRows.forEach((r) => r.country && s.add(r.country))));
+    Object.values(ownByIniu).forEach((rows) => rows.forEach((r) => r.country && s.add(r.country)));
     return [...s].sort();
-  }, [compByIniu]);
+  }, [compByIniu, ownByIniu]);
+
+  const inCountry = (rows: PriceRow[]) => rows.some((r) => !country || r.country === country);
 
   const visible = useMemo(
     () =>
       products.filter((p) => {
         if (product && String(p.id) !== product) return false;
-        return (compByIniu[p.id] ?? []).some((c) => c.priceRows.some((r) => !country || r.country === country));
+        return inCountry(ownByIniu[p.id] ?? []) || (compByIniu[p.id] ?? []).some((c) => inCountry(c.priceRows));
       }),
-    [products, product, country, compByIniu],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [products, product, country, compByIniu, ownByIniu],
   );
 
   return (
@@ -40,7 +44,7 @@ export default function PricesByCountry({
       <header className="page-head">
         <div>
           <h1>Prices by Country</h1>
-          <p>INIU products vs mapped competitors — per-retailer price history (EUR).</p>
+          <p>INIU vs mapped competitors — per-retailer price history (EUR). INIU&apos;s own price is the first row.</p>
         </div>
         <div className="pill">{visible.length} products</div>
       </header>
@@ -72,11 +76,17 @@ export default function PricesByCountry({
 
       {visible.length === 0 ? (
         <div className="table-panel">
-          <div className="empty">No priced competitors for this filter.</div>
+          <div className="empty">No prices for this filter.</div>
         </div>
       ) : (
         visible.map((p) => (
-          <ProductSection key={p.id} product={p} competitors={compByIniu[p.id] ?? []} country={country} />
+          <ProductSection
+            key={p.id}
+            product={p}
+            competitors={compByIniu[p.id] ?? []}
+            ownRows={ownByIniu[p.id] ?? []}
+            country={country}
+          />
         ))
       )}
     </>
@@ -86,14 +96,20 @@ export default function PricesByCountry({
 function ProductSection({
   product,
   competitors,
+  ownRows,
   country,
 }: {
   product: Prod;
   competitors: Competitor[];
+  ownRows: PriceRow[];
   country: string;
 }) {
-  const comps = competitors.filter((c) => c.priceRows.some((r) => !country || r.country === country));
-  if (comps.length === 0) return null;
+  const inC = (r: PriceRow) => !country || r.country === country;
+  const own = ownRows.filter(inC);
+  const ownDates = [...new Set(own.flatMap((r) => Object.keys(r.byDate)))].sort().slice(-4);
+  const comps = competitors.filter((c) => c.priceRows.some(inC));
+  if (own.length === 0 && comps.length === 0) return null;
+
   return (
     <section className="table-panel">
       <div className="table-head">
@@ -114,53 +130,105 @@ function ProductSection({
             </tr>
           </thead>
           <tbody>
-            {comps.map((c) => {
-              const rows = c.priceRows.filter((r) => !country || r.country === country);
-              const dates = c.dates.slice(-4);
-              return rows.map((r, i) => (
-                <tr key={`${c.id}-${r.retailer}-${i}`}>
-                  {i === 0 ? (
-                    <>
-                      <td rowSpan={rows.length}>
-                        <Thumb src={c.image_url} alt={c.name} />
-                      </td>
-                      <td rowSpan={rows.length}>{titleCase(c.brand)}</td>
-                      <td rowSpan={rows.length}>
-                        {c.name}
-                        <div className="sub">{c.sku}</div>
-                      </td>
-                      <td rowSpan={rows.length}>{c.rrp != null ? fmtMoney(c.rrp, c.rrp_currency) : "—"}</td>
-                    </>
-                  ) : null}
-                  <td>
-                    {r.retailer}
-                    {r.country ? <span className="muted"> ({r.country})</span> : null}
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      {dates.map((d, di) => {
-                        const v = r.byDate[d] ?? null;
-                        const prev = di > 0 ? r.byDate[dates[di - 1]] ?? null : null;
-                        let cls = "";
-                        if (v != null && prev != null && v !== prev) cls = v > prev ? "chg-up" : "chg-down";
-                        return (
-                          <div key={d} style={{ textAlign: "right", minWidth: 52 }}>
-                            <div style={{ fontSize: 10, color: "#9aa6ae" }}>{d.slice(5)}</div>
-                            <div className={cls}>{v != null ? fmtEUR(v) : "—"}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </td>
-                  <td>
-                    <Sparkline values={dates.map((d) => r.byDate[d] ?? null)} />
-                  </td>
-                </tr>
-              ));
-            })}
+            {own.length > 0 ? (
+              <Group
+                image={product.image_url}
+                brand="INIU"
+                name={product.name}
+                sku={product.sku}
+                rrp={null}
+                rrpCurrency={null}
+                rows={own}
+                dates={ownDates}
+                own
+              />
+            ) : null}
+            {comps.map((c) => (
+              <Group
+                key={c.id}
+                image={c.image_url}
+                brand={titleCase(c.brand)}
+                name={c.name}
+                sku={c.sku}
+                rrp={c.rrp}
+                rrpCurrency={c.rrp_currency}
+                rows={c.priceRows.filter(inC)}
+                dates={c.dates.slice(-4)}
+              />
+            ))}
           </tbody>
         </table>
       </div>
     </section>
+  );
+}
+
+function Group({
+  image,
+  brand,
+  name,
+  sku,
+  rrp,
+  rrpCurrency,
+  rows,
+  dates,
+  own,
+}: {
+  image: string | null;
+  brand: string;
+  name: string;
+  sku: string;
+  rrp: number | null;
+  rrpCurrency: string | null;
+  rows: PriceRow[];
+  dates: string[];
+  own?: boolean;
+}) {
+  const bg = own ? "var(--accent-bg)" : undefined;
+  return (
+    <>
+      {rows.map((r, i) => (
+        <tr key={`${sku}-${r.retailer}-${i}`} style={bg ? { background: bg } : undefined}>
+          {i === 0 ? (
+            <>
+              <td rowSpan={rows.length}>
+                <Thumb src={image} alt={name} />
+              </td>
+              <td rowSpan={rows.length} style={own ? { color: "var(--accent)", fontWeight: 700 } : undefined}>
+                {brand}
+              </td>
+              <td rowSpan={rows.length}>
+                {name}
+                <div className="sub">{sku}</div>
+              </td>
+              <td rowSpan={rows.length}>{rrp != null ? fmtMoney(rrp, rrpCurrency) : "—"}</td>
+            </>
+          ) : null}
+          <td>
+            {r.retailer}
+            {r.country ? <span className="muted"> ({r.country})</span> : null}
+          </td>
+          <td>
+            <div style={{ display: "flex", gap: 10 }}>
+              {dates.map((d, di) => {
+                const v = r.byDate[d] ?? null;
+                const prev = di > 0 ? r.byDate[dates[di - 1]] ?? null : null;
+                let cls = "";
+                if (v != null && prev != null && v !== prev) cls = v > prev ? "chg-up" : "chg-down";
+                return (
+                  <div key={d} style={{ textAlign: "right", minWidth: 52 }}>
+                    <div style={{ fontSize: 10, color: "#9aa6ae" }}>{d.slice(5)}</div>
+                    <div className={cls}>{v != null ? fmtEUR(v) : "—"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </td>
+          <td>
+            <Sparkline values={dates.map((d) => r.byDate[d] ?? null)} />
+          </td>
+        </tr>
+      ))}
+    </>
   );
 }
