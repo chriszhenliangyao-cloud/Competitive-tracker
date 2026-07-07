@@ -81,6 +81,40 @@ add/remove a channel by toggling `is_enabled` here; `run_scrape_raw.py` reads it
   (it queries base tables directly). Safe to ignore / eventually drop.
 - RLS is ON everywhere; policies allow `authenticated`; the app uses service-role (bypasses RLS).
 
+## How to run locally → upload competitive data to cloud (operator runbook)
+All pipeline scripts run from the **parent project root** (`~/Desktop/competitive追踪`), not this
+web repo. They auto-read the Supabase URL from `web/.env.local` (`NEXT_PUBLIC_SUPABASE_URL`); the
+only secret you must supply is the **service-role key** (never in git, never in the browser):
+
+```bash
+cd ~/Desktop/competitive追踪
+export SUPABASE_SERVICE_ROLE_KEY=<service_role secret>   # from Supabase → Settings → API
+# From mainland China, ensure Clash routes supabase.co through a node first (else uploads hang).
+```
+
+**Model B (target flow — scrape raw, map in the cloud):**
+```bash
+# 1. Dry-run first: scrape the enabled targets, print counts, write nothing.
+python3 channel/run_scrape_raw.py --dry-run
+# 2. Real run: scrape → insert raw_scrape_rows → call map_cycle() in Postgres.
+python3 channel/run_scrape_raw.py                      # optional: --retailer fnac --brand belkin
+# 3. Review whatever landed in mapping_reviews via the /reviews page (writes back to cloud).
+```
+Targets come from the `brand_retailer_targets` table (toggle `is_enabled` to add/remove a channel).
+`--date YYYY-MM-DD` overrides the cycle date; `--no-map` uploads raw without mapping.
+
+**Model A (current/legacy flow — map locally, then push mapped files):**
+```bash
+python3 channel/run_mapped_all.py                       # scrape + map locally → output/channel_mapped/*.xlsx
+python3 cloud/pipeline/validate_sync.py                 # read-only gate: cloud vs local, no writes
+python3 cloud/pipeline/push_to_supabase.py              # DRY-RUN preview (default, no --write)
+python3 cloud/pipeline/push_to_supabase.py --write --all-history   # actually upsert listings/prices/library/first-pass
+python3 cloud/pipeline/upload_images.py --write --no-upload        # link Storage images for any NEW rows
+python3 cloud/pipeline/upload_iniu.py --write                      # INIU images + competitive_links
+```
+Every write script is **dry-run by default** — add `--write` only after the dry-run/validate looks right.
+The web app reads Supabase live, so a successful push shows up on the site immediately (no redeploy).
+
 ## Pipeline scripts (parent project; run locally with `SUPABASE_SERVICE_ROLE_KEY`)
 - `channel/run_scrape_raw.py` — **Model B**: scrape raw → `raw_scrape_rows` → rpc `map_cycle`.
 - `channel/run_mapped_all.py` / `run_mapped.py` — legacy local scrape + map → mapped xlsx.

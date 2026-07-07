@@ -27,6 +27,38 @@ Done for Model B: `raw_scrape_rows` table; `first_pass` upgraded to a per-(retai
 cycle — memory + page-SKU-exact resolution, delisted detection, all correct); `run_scrape_raw.py`
 local runner (targets from `brand_retailer_targets`).
 
+## Pipeline evolution & gap checklist (current → target)
+**Current (Model A) — local is the brain, cloud only displays:**
+`run_mapped_all.py` (local scrape **+ local map** → `output/channel_mapped/*.xlsx`) →
+`validate_sync.py` (read-only gate) → `push_to_supabase.py --write --all-history` →
+`upload_images.py` / `upload_iniu.py` → site reads live. Pain: local disk can't be freed (the
+brain depends on `output/`, `product_library/`, images, historical xlsx); map logic locked in
+local Python; cloud is a passive mirror.
+
+**Target (Model B) — cloud is the brain & single source of truth, local only scrapes raw:**
+`run_scrape_raw.py` (scrape raw only → `raw_scrape_rows`) → `map_cycle()` (Postgres maps:
+memory > page-SKU-exact > new_listing, no fuzzy, auto delisted-detection) → `/reviews` writes
+back to cloud → site reads live. Win: local becomes a dumb scraper → raw files can be cold-archived
+and deleted (disk freed); map rules live in SQL (iterable/rollbackable); no "local vs cloud" truth split.
+
+**Built (Model B foundation, DONE):** `raw_scrape_rows` table; `first_pass` upgraded to a
+per-(retailer,code) registry (last_seen/is_active + unique index); `map_cycle()` validated on a real
+elcorteingles/belkin cycle (memory + page-SKU-exact + delisted all correct); `run_scrape_raw.py`
+runner (targets from `brand_retailer_targets`); `/reviews` writes cloud directly.
+
+**Step-by-step migration plan:** see `MIGRATION_MODEL_B.md` (single-experiment method — Stage A full
+local push → Stage B one-cycle raw→map diff=0 → Stage C guardrails → Stage D cutover + free disk).
+
+**Remaining before cutover (the gap):**
+1. Route `supabase.co` through the proxy so local raw uploads work reliably from China.
+2. **Shadow-validate**: run one `run_scrape_raw` cycle and diff `map_cycle` output vs the same-week
+   local mapped file — confirm identical before trusting the cloud brain.
+3. Cold-archive `output/` + `product_library/` + `INIU/` to external/Storage, then delete local.
+4. Cutover cleanup: purge legacy file-based `mapping_reviews` (`source_file <> 'cloud'`); clear the
+   ~9 test rows in `raw_scrape_rows` (run_id=1).
+5. Loose ends not blocking cutover: `push_iniu_prices.py` (INIU price still ad-hoc SQL); editing UI
+   (designed, not built); Google auth (@iniushop.com); drop the 4 unused `v_*` views.
+
 ## Other key decisions
 - **Reads via service-role, server-side.** RLS blocks anon; service role bypasses. Pages force-dynamic.
 - **push_to_supabase does NOT own image_url** — removed from its upsert payload so re-imports never
