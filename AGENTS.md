@@ -125,10 +125,14 @@ The web app reads Supabase live, so a successful push shows up on the site immed
 - `cloud/pipeline/upload_iniu.py` — INIU embedded images → Storage + populate `competitive_links`.
 - `cloud/pipeline/validate_sync.py` — read-only cross-check cloud vs local mapped files (gate before writes).
 - `cloud/pipeline/pull_reviews.py` — (Model A, being retired) export cloud review decisions → local workbook.
-- **INIU own prices** (`iniu_price_snapshots`): **no ingestion script yet** — currently loaded
-  ad-hoc via SQL from `output/iniu_output/channel_powerbanks_iniu_<date>.csv`, mapped to
-  `iniu_products` by SKU + product-name colour (BK/negra=Black, Tytanowy=Natural Titanium, etc.).
-  TODO: turn this into `push_iniu_prices.py`.
+- **INIU own prices** (`iniu_price_snapshots`) have their OWN lane — INIU is our own brand and never
+  goes through competitor mapping:
+  - `channel/run_iniu_prices.py` — scrape the 6 INIU channels (price-only) → `output/iniu_output/channel_powerbanks_iniu_<date>.csv`.
+  - `cloud/pipeline/push_iniu_prices.py` — ingest that CSV → `iniu_price_snapshots`. Identity cascade
+    (no fuzzy): `(retailer_key, retailer_product_code)` → EAN fallback → else UNMATCHED report.
+    Bridge bootstrapped from `channel/iniu_code_map.json` + `iniu_ean_map.json`, and extended from
+    cloud MEMORY (existing snapshots) at runtime. Dry-run by default; `--write` to upsert.
+  - PowerPaw / P41L rows show as UNMATCHED until those products are added to `iniu_products` + the bridge.
 - **After a `push_to_supabase --write` that adds NEW products/first_pass rows**, re-run
   `upload_images.py --write --no-upload` (links their Storage images) + `upload_iniu.py --write`.
   (Existing image_url is preserved by push; only new rows start null.)
@@ -140,6 +144,10 @@ hit (`Scrape SKU (library hit)`) > new_listing**. Upserts `listings` + `price_sn
 `first_pass` registry; auto-resolves reviews when a listing maps; creates `mapping_reviews`
 (source_file='cloud') for new/library-missing; marks `is_active=false` (delisted) for
 first_pass rows whose last_seen didn't advance. Strictly exact matching — **no fuzzy**.
+- **Own-brand guard**: `map_cycle` skips `brand_key='iniu'` entirely (returns `own_brand_skipped`
+  count) — INIU never creates competitor listings/reviews. Its prices go via `push_iniu_prices.py`
+  → `iniu_price_snapshots`. Delisted-detection also excludes iniu. (Fixed 2026-07-07 after INIU rows
+  were wrongly auto-mapped into the review queue.)
 
 ## Core rules (don't relearn)
 - **SKU = product identity; Retailer Product Code = channel identity; EAN = metadata.**

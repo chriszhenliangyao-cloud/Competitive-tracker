@@ -66,10 +66,15 @@ local push → Stage B one-cycle raw→map diff=0 → Stage C guardrails → Sta
 - **Prices shown in EUR** (static FX); RRP native. INIU own price also EUR.
 - **Field ownership contract** (see AGENTS.md) — added specifically to prevent cross-module drift
   when editing is introduced.
-- INIU price data (`channel_powerbanks_iniu_*.csv`) mapped to catalogue by SKU + product-name color
-  parsing (BK/negra=Black, Tytanowy=Natural Titanium, Beżowy→White, Coolblue P76=Black, etc.);
-  PowerPaw/P41L-P1 skipped (not in catalogue — user to create). **Loaded ad-hoc via SQL — no
-  `push_iniu_prices.py` script yet** (TODO); re-doing this for a new CSV means re-running that SQL.
+- INIU own-brand pipeline (2026-07-07): `run_iniu_prices.py` scrapes the 6 INIU channels →
+  CSV → `push_iniu_prices.py` upserts `iniu_price_snapshots`. Identity = `(retailer,code)` → EAN
+  fallback → UNMATCHED (no fuzzy). Bridge in `channel/iniu_code_map.json` + `iniu_ean_map.json`
+  (reconstructed from the first hand-mapped cycle), auto-extended from cloud snapshot memory.
+  0622 CSV: 52/56 matched; the 4 unmatched are PowerPaw ×3 + one [Outlet] listing (need catalogue
+  entries — PowerPaw/P41L-P1 to be created).
+- **map_cycle own-brand guard**: `map_cycle` now skips `brand_key='iniu'` so the own brand can never
+  pollute competitor `listings`/`mapping_reviews` (root cause of INIU being auto-mapped last run).
+  Verified with a transactional test. Delisted-detection also excludes iniu.
 
 ## Open / next work
 1. **Editing (Library / First Pass / INIU) — designed, not built.** Plan: Library edits `products`
@@ -82,7 +87,7 @@ local push → Stage B one-cycle raw→map diff=0 → Stage C guardrails → Sta
    an external/Storage cold bucket; then delete local.
 4. Cleanup: legacy file-based `mapping_reviews` coexist with cloud ones (UI dedupes by listing; purge
    `source_file <> 'cloud'` at cutover). INIU own price is single-date → trend fills as scrapes accrue.
-5. Missing scripts/tidy: write `push_iniu_prices.py` (INIU price load is ad-hoc SQL today); drop the
+5. Tidy: add PowerPaw/P41L-P1 to `iniu_products` (+ bridge) so they stop showing UNMATCHED; drop the
    4 unused `v_*` views eventually; clear the ~9 test rows in `raw_scrape_rows` (run_id=1).
 
 ## Data-quality notes
