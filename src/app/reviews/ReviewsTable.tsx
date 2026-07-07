@@ -74,7 +74,7 @@ export default function ReviewsTable({ rows, skuOptions }: { rows: ReviewRow[]; 
       <header className="page-head">
         <div>
           <h1>Reviews</h1>
-          <p>Listings awaiting manual SKU resolution. Resolve here — applied to the data on the next local sync.</p>
+          <p>Listings awaiting manual SKU resolution. Resolving applies immediately — the listing maps now and stays mapped on every future cycle.</p>
         </div>
         <div className="pill">{pending} pending</div>
       </header>
@@ -87,8 +87,8 @@ export default function ReviewsTable({ rows, skuOptions }: { rows: ReviewRow[]; 
       </section>
 
       <div className="note">
-        Resolving sets the decision in the cloud (status = done). It becomes the real mapping when you run{" "}
-        <code>pull_reviews.py</code> → <code>apply_mapping_review.py</code> → <code>push_to_supabase.py</code> locally.
+        Resolving writes your decision into the mapping registry (<code>first_pass</code>): the listing
+        becomes <strong>mapped</strong> right away and won&apos;t return to this queue on future scrapes.
       </div>
 
       <div className="filter-bar">
@@ -262,8 +262,8 @@ function ResolveModal({
           <div className="sub">
             {sku.trim()
               ? match
-                ? `✓ existing library product: ${match.name}`
-                : "new SKU — a library row will be created on apply"
+                ? `✓ existing library product: ${match.name} — maps immediately`
+                : "not in library — listing will be flagged Library Missing until this SKU is added to the catalogue"
               : `${options.length} known ${titleCase(review.listing?.brand?.display_name)} SKUs`}
           </div>
         </div>

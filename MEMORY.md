@@ -90,7 +90,63 @@ local push → Stage B one-cycle raw→map diff=0 → Stage C guardrails → Sta
 5. Tidy: add PowerPaw/P41L-P1 to `iniu_products` (+ bridge) so they stop showing UNMATCHED; drop the
    4 unused `v_*` views eventually; clear the ~9 test rows in `raw_scrape_rows` (run_id=1).
 
+## Model B cutover — READY (prepared 2026-07-07)
+Everything is staged so the NEXT weekly run maps in the cloud (`run_scrape_raw` → `map_cycle`),
+closing the full loop. What was prepared and verified:
+- **Targets**: `brand_retailer_targets` filled to all **53** calibrated (retailer,brand) pairs, enabled
+  (was 26). `run_scrape_raw` reads this list.
+- **Calibration present**: `first_pass_observations` has 588 code→sku mappings → map_cycle's memory
+  cascade is as good as the local mapper's.
+- **Engine parity proven** (shadow test, rolled back): fed all 988 current listings back through
+  `map_cycle` → **987/987 identical** to the local mapper, +2 extra maps via the page-SKU tier
+  (map_cycle has it, local doesn't). Zero regressions.
+- **Fixed 1 normalization divergence**: `products.sku_key` was stored with a different rule than
+  map_cycle's `fp_norm_sku` (only the malformed SKU `Ugreen 25742`: `EEN 25742` vs `EEN25742`).
+  Realigned all 548 `products.sku_key = fp_norm_sku(sku, brand)`. CAVEAT: a Model-A `push_to_supabase
+  --scope library-firstpass` recomputes sku_key with the old rule and would revert this one SKU —
+  either stop re-pushing library, make push use fp_norm_sku, or clean the `Ugreen 25742` SKU.
+- **Loop closed**: `resolve_review` writes decisions into first_pass; map_cycle reads it next cycle.
+- **Guards live**: own-brand skip, review dedupe trigger.
+
+Next-run commands (Model B, supervised):
+```
+export SUPABASE_SERVICE_ROLE_KEY=<secret>            # + Clash routing supabase.co
+# validate one channel first:
+python channel/_supervise.py --stall-timeout 300 -- /opt/anaconda3/bin/python -u \
+  channel/run_scrape_raw.py --retailer elcorteingles --brand belkin
+# then the full run (map_cycle runs automatically at the end):
+python channel/_supervise.py --stall-timeout 300 -- /opt/anaconda3/bin/python -u \
+  channel/run_scrape_raw.py
+```
+Open caveats: (a) `run_scrape_raw` has no per-target resume yet — a supervisor restart re-scrapes
+from scratch (add resume like run_iniu_prices if the full run proves flaky). (b) A pair that scrapes
+0 rows is simply absent from raw → NOT delisted (safe); but a PARTIAL scrape still delists the
+missing rows — the Stage-C 0-row/partial circuit-breaker is still unbuilt. (c) xkom still returns 0
+(harmless: absent from raw, no false delist).
+
+## Review resolution — permanent, no new layers (2026-07-07)
+Principle (Chris): **we only moved storage Excel→SQL; the mapping logic is unchanged.** So don't
+invent override tables or lock flags. The Excel-era `apply_mapping_review.py` wrote the human
+decision into the **first_pass registry** (retailer_product_code → sku); the mapping cascade already
+reads first_pass, so a resolved listing maps automatically forever and never returns to review.
+- The SQL port had DROPPED that apply step (resolveReview only marked the review `done`) → decisions
+  were inert and would re-queue. Fixed with SQL fn `resolve_review(listing, sku, name, reviewer)`:
+  writes `first_pass_observations.sku` for that (retailer,code), flips the listing to mapped/
+  library_missing, closes the queue — atomic. `resolveReview` server action now calls it.
+- Takes effect on the SQL mapping path (map_cycle reads cloud first_pass). The old local-Excel
+  `run_mapped_all` reads local first_pass files, so it honors decisions only once mapping runs from
+  SQL (Model B) — consistent as long as resolve and map use the same store.
+- Considered but REJECTED as over-design: a separate `sku_overrides` tier-0 table, and a `manual`
+  lock column — unnecessary because a calibrated listing is `mapped` (not new_listing), so it never
+  re-enters review and can't be clobbered.
+
 ## Data-quality notes
+- **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
+  351 distinct listings — Model A `push_to_supabase` used a date-stamped `source_file` in the dedupe
+  key `(listing_id, source_file, source_row)`, so every cycle re-recorded an unreviewed listing (one
+  listing had 6). Fixed: (1) one-time cleanup collapsed to 1 pending per listing (867→351); (2) trigger
+  `trg_mapping_reviews_dedupe_pending` blocks a 2nd pending review per listing (stops *unresolved*
+  ones duplicating). Resolution permanence is handled by `resolve_review` above (writes first_pass).
 - Some INIU SKUs list twice at one retailer (e.g. komputronik P64-P1) → unique (product,retailer,date)
   keeps one. 16 competitor SKUs have no specs (mostly review-added) — fill via Library editing.
 - 6 competitor pairs share a Storage image = duplicate SKU/EAN in the source library (worth merging).

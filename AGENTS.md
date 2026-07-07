@@ -71,7 +71,10 @@ Every field has ONE home table. Every view JOINs to the home; editing writes the
 `iniu_products` (INIU catalogue) · `listings` (retailer listings, FK product_id) ·
 `price_snapshots` (per listing×date) · `first_pass_observations` (registry per retailer×code:
 first_seen/last_seen/is_active, partial-unique on (retailer_id, retailer_product_code)) ·
-`mapping_reviews` (review queue; cloud rows use source_file='cloud') ·
+`mapping_reviews` (review queue; cloud rows use source_file='cloud'; a BEFORE INSERT trigger
+`trg_mapping_reviews_dedupe_pending` enforces **at most one PENDING review per listing** — a second
+pending insert for the same listing is silently skipped, so an unreviewed listing can't pile up a
+review row every cycle) ·
 `competitive_links` (iniu↔competitor) · `iniu_price_snapshots` (INIU own per retailer×date) ·
 `raw_scrape_rows` (Model B staging) · `brand_retailer_targets` (**which retailer×brand to scrape** —
 add/remove a channel by toggling `is_enabled` here; `run_scrape_raw.py` reads it) ·

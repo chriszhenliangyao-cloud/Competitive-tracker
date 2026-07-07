@@ -3,9 +3,12 @@
 import { getSupabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 
-// Phase 2 (Model A): the cloud only CAPTURES the mapping decision into
-// mapping_reviews. The local apply pipeline (pull_reviews.py -> apply_mapping_review.py
-// -> push_to_supabase.py) turns it into the real mapped state. No multi-table writes here.
+// Resolving a review APPLIES the decision — same logic as the Excel-era
+// apply_mapping_review.py (storage changed Excel->SQL, logic unchanged). The
+// resolve_review() SQL function writes the human decision into the first_pass
+// registry (retailer_product_code -> sku), flips the listing to mapped, and
+// closes the queue, atomically. Because the mapping cascade reads first_pass, the
+// listing maps automatically every future cycle and never returns to review.
 // NOTE: auth gating is deferred — protect this deployment via Vercel access control for now.
 
 export async function resolveReview(
@@ -17,20 +20,30 @@ export async function resolveReview(
   const sku = (correctSku || "").trim();
   if (!sku) return { ok: false, error: "Correct SKU is required" };
   const sb = getSupabase();
-  const patch = {
-    status: "done" as const,
-    correct_sku: sku,
-    product_name: productName?.trim() || null,
-    reviewed_by: "cloud-review",
-    reviewed_at: new Date().toISOString(),
-  };
-  // A listing has one pending review per weekly file (all-history). Resolve them all
-  // so the listing fully leaves the queue and every weekly occurrence gets applied.
-  const q = sb.from("mapping_reviews").update(patch);
-  const { error } = listingId != null
-    ? await q.eq("listing_id", listingId).eq("status", "pending")
-    : await q.eq("id", id);
-  if (error) return { ok: false, error: error.message };
+
+  if (listingId != null) {
+    // Apply to first_pass + listing + close the queue, atomically (one RPC).
+    const { error } = await sb.rpc("resolve_review", {
+      p_listing_id: listingId,
+      p_sku: sku,
+      p_product_name: productName?.trim() || null,
+      p_reviewer: "cloud-review",
+    });
+    if (error) return { ok: false, error: error.message };
+  } else {
+    // Fallback: a review row with no listing — just close it.
+    const { error } = await sb
+      .from("mapping_reviews")
+      .update({
+        status: "done" as const,
+        correct_sku: sku,
+        product_name: productName?.trim() || null,
+        reviewed_by: "cloud-review",
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return { ok: false, error: error.message };
+  }
   revalidatePath("/reviews");
   return { ok: true };
 }
