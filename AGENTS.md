@@ -3,3 +3,122 @@
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+# INIU Competitive Tracker — Cloud App (agent context)
+
+European powerbank competitive-intelligence dashboard for INIU. **This repo is the
+Next.js web app** (deployed to Vercel, reads Supabase/Postgres). It is the cloud port of a
+local Python scraping + dashboard system. Read this file **and `MEMORY.md`** before working.
+
+---
+
+## Source-of-truth & deploy (read first)
+- Two working contexts, don't confuse them:
+  - **In the full project** (`~/Desktop/competitive追踪`): the app's canonical source is
+    `competitive追踪/web`. Edit there, then `rsync` into this repo clone (`Copetitive-tracker`).
+  - **Only this repo cloned from GitHub**: edit it directly and push. But the **pipeline scripts
+    (scraping, Supabase push, image upload) are NOT in this repo** — they live in the parent
+    project and cannot be run from a repo-only clone. This repo is web app only.
+- **Deploy = commit + push this repo** → Vercel (git-connected) builds & deploys. No manual build.
+- Local check before pushing: `npm run build` (Next 16.2.9, App Router, Turbopack, React 19).
+- `vercel.json` pins `{"framework":"nextjs"}` — **required**; without it Vercel served the root as
+  404 (the project's Framework Preset was null). Don't remove it.
+- Vercel project `copetitive-tracker` (note the typo) → https://copetitive-tracker.vercel.app
+- Supabase project ref `upoyfwfglymcubsuopfn`. See "Pipeline" for the parent-project scripts.
+
+## Architecture
+- **Next.js App Router**; every page is `export const dynamic = "force-dynamic"` →
+  server-rendered per request, live from Supabase (no static caching of data).
+- **All DB reads use the service-role key, server-side only** (`src/lib/supabase.ts`).
+  NEVER expose it to the browser; NEVER import that module into a `"use client"` component.
+  Env vars (set in Vercel): `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+- Data volumes are small (hundreds–few thousand rows) → server fetches everything and ships it
+  to a client component that does filtering/search/sort in-browser.
+- Prices normalized to **EUR** for comparison via static FX (`src/lib/format.ts`); RRP shown native.
+- Writes (currently only Reviews "Resolve") go through **server actions** using the service-role
+  client. There is **no auth yet** — protect the deployment via Vercel Deployment Protection until
+  Google login (@iniushop.com) is added.
+
+## Pages (and what each reads)
+| Route | Purpose | Main tables |
+|---|---|---|
+| `/` | **Prices by Country** — INIU vs mapped competitors, per-retailer price history + trend; INIU's own price is the first row | iniu_products, competitive_links→products, price_snapshots, iniu_price_snapshots |
+| `/channel` | Retailer listings grouped by product; brand/country/retailer/status/magsafe/capacity filters; drill-in price chart | listings, products, price_snapshots |
+| `/iniu` | INIU catalogue; click → competitive comparison (General/Price tabs) + INIU own channel price | iniu_products, competitive_links, price_snapshots, iniu_price_snapshots |
+| `/library` | Competitor SKU library (canonical specs) | products |
+| `/reviews` | Pending mapping reviews; **Resolve writes back** | mapping_reviews, listings |
+| `/first-pass` | Per-channel presence registry | first_pass_observations |
+
+## FIELD OWNERSHIP — the consistency contract (do not violate)
+Every field has ONE home table. Every view JOINs to the home; editing writes the home.
+**Never copy a field into a second table** — that is exactly how modules drift out of sync.
+
+| Field class | Home (source of truth) | Edited via |
+|---|---|---|
+| Competitor specs/identity: capacity, wired_power, wireless_power, usb_ports, size, weight, magsafe, ean, name, rrp, image_url | **`products`** | Library page |
+| INIU's own specs | **`iniu_products`** | INIU page |
+| Channel mapping & presence: retailer_product_code→SKU, status, first_seen/last_seen/is_active | **`first_pass_observations`** / **`listings`** | First Pass / Reviews |
+| Competitor price history | **`price_snapshots`** | not hand-edited (from scrapes) |
+| INIU own price history | **`iniu_price_snapshots`** | ingested from INIU channel scrape |
+| INIU ↔ competitor links | **`competitive_links`** | INIU review step |
+
+> Known duplication to remove: `first_pass_observations` still carries its own spec columns
+> (legacy from heavy scrape). The First Pass page must display specs **JOINed from `products`**
+> (by SKU), not its own copy, so a Library edit propagates everywhere. See MEMORY.md → editing.
+
+## Supabase — key tables
+`brands, retailers, categories` (dimensions) · `products` (competitor library) ·
+`iniu_products` (INIU catalogue) · `listings` (retailer listings, FK product_id) ·
+`price_snapshots` (per listing×date) · `first_pass_observations` (registry per retailer×code:
+first_seen/last_seen/is_active, partial-unique on (retailer_id, retailer_product_code)) ·
+`mapping_reviews` (review queue; cloud rows use source_file='cloud') ·
+`competitive_links` (iniu↔competitor) · `iniu_price_snapshots` (INIU own per retailer×date) ·
+`raw_scrape_rows` (Model B staging) · `brand_retailer_targets` (**which retailer×brand to scrape** —
+add/remove a channel by toggling `is_enabled` here; `run_scrape_raw.py` reads it) ·
+`import_runs` / `import_files` / `audit_events` (audit is empty; editing will write it).
+- Legacy views `v_dashboard_latest`, `v_dashboard_history`, `v_review_queue`,
+  `v_iniu_competitive_matrix` exist from the initial schema but the app does **NOT** use them
+  (it queries base tables directly). Safe to ignore / eventually drop.
+- RLS is ON everywhere; policies allow `authenticated`; the app uses service-role (bypasses RLS).
+
+## Pipeline scripts (parent project; run locally with `SUPABASE_SERVICE_ROLE_KEY`)
+- `channel/run_scrape_raw.py` — **Model B**: scrape raw → `raw_scrape_rows` → rpc `map_cycle`.
+- `channel/run_mapped_all.py` / `run_mapped.py` — legacy local scrape + map → mapped xlsx.
+- `cloud/pipeline/push_to_supabase.py` — push local mapped/library/first-pass → Supabase.
+  **Deliberately does NOT push image_url** (owned by upload_images). Flags: `--write --scope all --all-history`.
+- `cloud/pipeline/upload_images.py` — local PNGs → Storage; rewrites products/first_pass/reviews image_url.
+  `--no-upload` (DB-only, files already in Storage), `--reviews-only`, `--report`.
+- `cloud/pipeline/upload_iniu.py` — INIU embedded images → Storage + populate `competitive_links`.
+- `cloud/pipeline/validate_sync.py` — read-only cross-check cloud vs local mapped files (gate before writes).
+- `cloud/pipeline/pull_reviews.py` — (Model A, being retired) export cloud review decisions → local workbook.
+- **INIU own prices** (`iniu_price_snapshots`): **no ingestion script yet** — currently loaded
+  ad-hoc via SQL from `output/iniu_output/channel_powerbanks_iniu_<date>.csv`, mapped to
+  `iniu_products` by SKU + product-name colour (BK/negra=Black, Tytanowy=Natural Titanium, etc.).
+  TODO: turn this into `push_iniu_prices.py`.
+- **After a `push_to_supabase --write` that adds NEW products/first_pass rows**, re-run
+  `upload_images.py --write --no-upload` (links their Storage images) + `upload_iniu.py --write`.
+  (Existing image_url is preserved by push; only new rows start null.)
+
+## map_cycle (cloud mapping engine — SQL function)
+`map_cycle(run_id)` resolves each `raw_scrape_rows` row → status. Precedence:
+**MEMORY (listings/first_pass code→name cascade, human-verified wins) > PAGE-SKU exact library
+hit (`Scrape SKU (library hit)`) > new_listing**. Upserts `listings` + `price_snapshots` +
+`first_pass` registry; auto-resolves reviews when a listing maps; creates `mapping_reviews`
+(source_file='cloud') for new/library-missing; marks `is_active=false` (delisted) for
+first_pass rows whose last_seen didn't advance. Strictly exact matching — **no fuzzy**.
+
+## Core rules (don't relearn)
+- **SKU = product identity; Retailer Product Code = channel identity; EAN = metadata.**
+- **No fuzzy matching** — unresolved rows → `new_listing` for manual review.
+- **First-party only** (marketplace filtered inside the scrapers, not the mapper).
+- Images: permanent images live in **Supabase Storage** (`product-images/<brand>/<sku|ean>.png`);
+  retailer CDN URLs are transient fallbacks (a broken one usually means the product delisted).
+
+## Gotchas
+- **Supabase free tier auto-pauses after ~7 days idle.** A paused project loses its DNS →
+  Vercel serverless throws `ENOTFOUND upoyfwfglymcubsuopfn.supabase.co` → whole site 500s. Fix:
+  Restore in Supabase; if Vercel still 500s, redeploy to clear the cached DNS failure. Consider Pro.
+- From mainland China, `*.vercel.app` and `supabase.co` need the local proxy (Clash) to route those
+  domains through a node, else `ERR_CONNECTION_CLOSED` / blocked uploads.
+- `push_to_supabase` intentionally does not manage `image_url`; that column is owned end-to-end by
+  `upload_images.py`. Do not add it back to the push payload.
