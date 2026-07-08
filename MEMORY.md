@@ -117,9 +117,13 @@ python channel/_supervise.py --stall-timeout 300 -- /opt/anaconda3/bin/python -u
 python channel/_supervise.py --stall-timeout 300 -- /opt/anaconda3/bin/python -u \
   channel/run_scrape_raw.py
 ```
-Open caveats: (a) `run_scrape_raw` has no per-target resume yet — a supervisor restart re-scrapes
-from scratch, and it holds all raw rows in memory until the end (upload once). Add per-retailer
-incremental upload if the full run proves flaky. (b) DONE (2026-07-08): the Stage-C **partial-scrape
+Open caveats: (a) DONE (2026-07-08): `run_scrape_raw` now uploads **incrementally per retailer**
+(`flush_retailer` uploads a retailer's rows the moment it finishes, so a crash keeps what's already
+in the cloud) and **auto-resumes** — on start it reuses today's still-'running' import_run
+(`resolve_run`), skips pairs already uploaded under it (`done_pairs_for_run`), and only maps + closes
+the run on a clean finish (a crash leaves it 'running' for the next invocation to continue). `--fresh`
+forces a new run. `map_cycle` runs once at the end over the whole run_id (idempotent). (b) DONE
+(2026-07-08): the Stage-C **partial-scrape
 circuit breaker** is built into `run_scrape_raw.py`. Before upload/map it compares each
 (retailer,brand)'s scraped count to last cycle's active count (`get_active_baseline` /
 `apply_circuit_breaker`): a pair scraping < `CB_FLOOR` (0.5) of prior when prior ≥ `CB_MIN_PRIOR` (6)
