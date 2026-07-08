@@ -39,9 +39,21 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
 - Data volumes are small (hundreds–few thousand rows) → server fetches everything and ships it
   to a client component that does filtering/search/sort in-browser.
 - Prices normalized to **EUR** for comparison via static FX (`src/lib/format.ts`); RRP shown native.
-- Writes (currently only Reviews "Resolve") go through **server actions** using the service-role
-  client. There is **no auth yet** — protect the deployment via Vercel Deployment Protection until
-  Google login (@iniushop.com) is added.
+- Writes (Reviews "Resolve", INIU Hide/Unhide) go through **server actions** using the service-role
+  client.
+- **Auth + RBAC** (Google login, `src/lib/access.ts` is the single source of truth):
+  - `USERS` maps each of the 7 allowed emails → `{role, countries}`. `ALLOWED_EMAILS` is derived
+    from its keys. `role: "admin"` → `countries: null` (sees all); `role: "sales"` → country-scoped
+    (ISO-2 list, e.g. Victor FR, Juan ES, Slawomir/Lukasz PL).
+  - **Reads use the service-role key → Postgres RLS does NOT apply.** Access control is enforced in
+    the app, two layers: (1) **middleware** (`src/lib/supabase/middleware.ts`) blocks the login gate
+    AND redirects non-admins away from `ADMIN_ONLY` pages (`/iniu`, `/library`, `/reviews`,
+    `/first-pass`); (2) **server-side data filtering** — Dashboard (`/`), Channel (`/channel`),
+    Roadmap (`/roadmap`) filter rows to the caller's countries via `getScope()`/`allowsCountry()`
+    (`src/lib/scope.ts`) BEFORE shipping props, so the browser never receives other countries' data.
+    Sidebar also hides admin-only links for sales (cosmetic; middleware is the real gate).
+  - To change who/role/country: edit `src/lib/access.ts` and push. Do NOT try to enforce this with
+    RLS policies — service-role bypasses them; keep enforcement in middleware + page filters.
 
 ## Pages (and what each reads)
 | Route | Purpose | Main tables |

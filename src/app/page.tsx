@@ -1,5 +1,6 @@
 import { getSupabase } from "@/lib/supabase";
 import { getChannelRows } from "@/lib/data";
+import { getScope, allowsCountry } from "@/lib/scope";
 import { effectivePrice, toEUR } from "@/lib/format";
 import PricesByCountry, { type Prod } from "./PricesByCountry";
 import type { Competitor, PriceRow } from "./iniu/IniuTable";
@@ -118,6 +119,26 @@ export default async function Home() {
       dates: [...(chDates.get(k) ?? [])].sort(),
       hidden: false,
     });
+  }
+
+  // Country scope: a sales user only sees their country's channel prices (INIU
+  // own + competitors), and only competitors actually sold there. Filtered
+  // server-side so the browser never receives other countries' prices. Admin: all.
+  const scope = await getScope();
+  if (scope.countries !== null) {
+    const ok = (co: string | null | undefined) => allowsCountry(scope, co);
+    for (const id of Object.keys(ownByIniu)) {
+      const kept = ownByIniu[+id].filter((r) => ok(r.country));
+      if (kept.length) ownByIniu[+id] = kept;
+      else delete ownByIniu[+id];
+    }
+    for (const id of Object.keys(compByIniu)) {
+      const kept = compByIniu[+id]
+        .map((c) => ({ ...c, priceRows: c.priceRows.filter((r) => ok(r.country)) }))
+        .filter((c) => c.priceRows.length > 0);
+      if (kept.length) compByIniu[+id] = kept;
+      else delete compByIniu[+id];
+    }
   }
 
   const products = (iniuRes.data ?? []) as Prod[];

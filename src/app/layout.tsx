@@ -3,7 +3,7 @@ import "./globals.css";
 import Sidebar from "./Sidebar";
 import { getSupabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/access";
+import { isAllowedEmail, userFor } from "@/lib/access";
 
 export const metadata: Metadata = {
   title: "Competitive Tracker",
@@ -43,13 +43,14 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
   const authed = isAllowedEmail(user?.email);
+  const isAdmin = userFor(user?.email)?.role === "admin";
 
   return (
     <html lang="en">
       <body>
         {authed ? (
           <div className="app">
-            <Sidebar counts={await getCounts()} userEmail={user!.email!} />
+            <Sidebar counts={await getCounts()} userEmail={user!.email!} isAdmin={isAdmin} />
             <main className="content">
               <div className="content-inner">{children}</div>
             </main>

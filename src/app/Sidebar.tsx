@@ -13,7 +13,15 @@ type Counts = {
 
 const fmt = (n: number) => n.toLocaleString();
 
-export default function Sidebar({ counts, userEmail }: { counts: Counts; userEmail?: string | null }) {
+export default function Sidebar({
+  counts,
+  userEmail,
+  isAdmin = false,
+}: {
+  counts: Counts;
+  userEmail?: string | null;
+  isAdmin?: boolean;
+}) {
   const path = usePathname();
   const is = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
@@ -39,16 +47,18 @@ export default function Sidebar({ counts, userEmail }: { counts: Counts; userEma
       <nav className="nav-section">
         <div className="nav-section-label">Market</div>
         {item("/channel", "Channel", counts.channel)}
-        {item("/iniu", "INIU Products", counts.iniu)}
+        {isAdmin ? item("/iniu", "INIU Products", counts.iniu) : null}
         {item("/roadmap", "Roadmap")}
       </nav>
 
-      <nav className="nav-section">
-        <div className="nav-section-label">Data</div>
-        {item("/library", "Library", counts.library)}
-        {item("/reviews", "Reviews", counts.reviews)}
-        {item("/first-pass", "First Pass", counts.firstPass)}
-      </nav>
+      {isAdmin ? (
+        <nav className="nav-section">
+          <div className="nav-section-label">Data</div>
+          {item("/library", "Library", counts.library)}
+          {item("/reviews", "Reviews", counts.reviews)}
+          {item("/first-pass", "First Pass", counts.firstPass)}
+        </nav>
+      ) : null}
 
       {userEmail ? (
         <div className="sidebar-user">

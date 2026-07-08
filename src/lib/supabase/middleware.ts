@@ -1,6 +1,10 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isAllowedEmail } from "@/lib/access";
+import { isAllowedEmail, userFor } from "@/lib/access";
+
+// Curation / cross-country pages restricted to admins. Sales users are limited to
+// the country-scoped views (Dashboard / Channel / Roadmap).
+const ADMIN_ONLY = ["/iniu", "/library", "/reviews", "/first-pass"];
 
 // HARD gate: only the allow-listed accounts (src/lib/access.ts) may use the app.
 // Server-side enforcement so a session outside the list can never reach a page.
@@ -49,6 +53,14 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     if (user) url.searchParams.set("error", "unauthorized");
+    return NextResponse.redirect(url);
+  }
+
+  // Role gate: non-admins can't reach the admin-only pages (redirect home).
+  const role = userFor(user.email)?.role;
+  if (role !== "admin" && ADMIN_ONLY.some((p) => path === p || path.startsWith(p + "/"))) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

@@ -55,15 +55,32 @@ type ProdRow = {
   capacity: string | null; image_url: string | null; brand: { key: string } | null;
 };
 
-export async function getRoadmapData(): Promise<RoadmapData> {
+// allowedCountries: null = admin (all); [..] = sales, only competitors sold in
+// those ISO-2 countries appear (the INIU backbone columns are always the full lineup).
+export async function getRoadmapData(allowedCountries: string[] | null = null): Promise<RoadmapData> {
   const sb = getSupabase();
-  const [iniuRes, priceRes, linkRes, hiddenRes, prodRes] = await Promise.all([
+  const [iniuRes, priceRes, linkRes, hiddenRes, prodRes, listRes] = await Promise.all([
     sb.from("iniu_products").select("id,sku,name,capacity,image_url"),
     sb.from("iniu_price_snapshots").select("iniu_product_id,price,currency"),
     sb.from("competitive_links").select("iniu_product_id,competitor_product_id").limit(100000),
     sb.from("hidden_competitive_links").select("iniu_product_id,competitor_product_id").limit(100000),
     sb.from("products").select("id,name,rrp,rrp_currency,capacity,image_url,brand:brands(key)"),
+    allowedCountries === null
+      ? Promise.resolve({ data: [] as unknown[] })
+      : sb.from("listings").select("product_id, retailer:retailers(country)").limit(100000),
   ]);
+
+  // competitor product -> set of countries it's sold in (for sales scoping only).
+  const compCountries = new Map<number, Set<string>>();
+  if (allowedCountries !== null) {
+    for (const l of (listRes.data ?? []) as unknown as { product_id: number | null; retailer: { country: string | null } | null }[]) {
+      const co = l.retailer?.country;
+      if (l.product_id == null || !co) continue;
+      let s = compCountries.get(l.product_id);
+      if (!s) { s = new Set(); compCountries.set(l.product_id, s); }
+      s.add(co);
+    }
+  }
   const iniu = (iniuRes.data ?? []) as unknown as IniuRow[];
   const prices = (priceRes.data ?? []) as unknown as PriceRow[];
   // Drop hidden pairs so hidden competitors never appear on the Roadmap.
@@ -131,6 +148,11 @@ export async function getRoadmapData(): Promise<RoadmapData> {
   for (const p of prods) {
     const linkIds = linksByComp.get(p.id);
     if (!linkIds || !linkIds.length) continue;
+    // Country scope: drop competitors not sold in any allowed country.
+    if (allowedCountries !== null) {
+      const cos = compCountries.get(p.id);
+      if (!cos || !allowedCountries.some((c) => cos.has(c))) continue;
+    }
     const eur = toEUR(p.rrp != null ? Number(p.rrp) : null, p.rrp_currency ?? "EUR");
     if (eur == null) continue;
     const pcap = capNum(p.capacity);

@@ -161,6 +161,23 @@ comes back. Same class of bug as the review-permanence one.
   greys hidden rows with **Unhide**. Catalogue shows visible count + `(N hidden)`. `hidden_by` = the
   signed-in email (audit trail the old dashboard lacked).
 
+## Role + country access control (2026-07-08)
+Users split admin/sales in `src/lib/access.ts` (`USERS` map = single source; `ALLOWED_EMAILS`
+derived from its keys). Admin (Chris/Julio/Jiwen) → all countries. Sales → one country each: Victor
+FR, Juan ES, Slawomir + Lukasz PL. Requirement: sales see only their country's channels + the
+competitors sold there, on Dashboard / Channel / Roadmap.
+- **Enforcement is app-layer, NOT Postgres RLS** — all reads use the service-role key which bypasses
+  RLS, so RLS policies would do nothing. Instead: (1) middleware redirects non-admins off the
+  admin-only pages (`/iniu`, `/library`, `/reviews`, `/first-pass`); (2) the three sales-facing pages
+  filter data to the caller's countries **server-side** (`getScope()`/`allowsCountry()` in
+  `src/lib/scope.ts`) before shipping props, so the browser physically never gets other countries'
+  rows. This is genuine enforcement (server boundary), just not DB-RLS. Sidebar hides admin-only
+  links for sales (cosmetic; middleware is the hard gate).
+- Country codes are ISO-2 matching `retailers.country` (FR/ES/PL/DE; nobody owns DE→sales can't see
+  Coolblue, admins can). Roadmap scopes competitors via a listings→retailer.country presence index;
+  the INIU backbone columns stay the full lineup for everyone. Decision (Chris): the other four pages
+  are **admin-only**, not country-scoped-for-sales.
+
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
   351 distinct listings — Model A `push_to_supabase` used a date-stamped `source_file` in the dedupe
