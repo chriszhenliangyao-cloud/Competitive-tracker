@@ -40,6 +40,7 @@ export default function Sidebar({ counts, userEmail }: { counts: Counts; userEma
         <div className="nav-section-label">Market</div>
         {item("/channel", "Channel", counts.channel)}
         {item("/iniu", "INIU Products", counts.iniu)}
+        {item("/roadmap", "Roadmap")}
       </nav>
 
       <nav className="nav-section">

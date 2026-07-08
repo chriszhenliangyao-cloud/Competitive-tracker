@@ -1,14 +1,10 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAllowedEmail } from "@/lib/access";
 
-// HARD gate: only @iniushop.com may use the app. The Google `hd` hint + a
-// Workspace "Internal" consent screen restrict who can authenticate; this is
-// the server-side enforcement so a non-domain session can never reach a page.
-const ALLOWED_DOMAIN = "iniushop.com";
+// HARD gate: only the allow-listed accounts (src/lib/access.ts) may use the app.
+// Server-side enforcement so a session outside the list can never reach a page.
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
-
-const isDomainUser = (email: string | null | undefined) =>
-  (email ?? "").toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -40,7 +36,7 @@ export async function updateSession(request: NextRequest) {
 
   // Auth routes always render (login / callback / signout). Avoids redirect loops.
   if (path.startsWith("/auth")) {
-    if (user && isDomainUser(user.email) && path === "/auth/login") {
+    if (user && isAllowedEmail(user.email) && path === "/auth/login") {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       return NextResponse.redirect(url);
@@ -48,11 +44,11 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Every other route requires a valid @iniushop.com session.
-  if (!user || !isDomainUser(user.email)) {
+  // Every other route requires an allow-listed session.
+  if (!user || !isAllowedEmail(user.email)) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
-    if (user) url.searchParams.set("error", "domain");
+    if (user) url.searchParams.set("error", "unauthorized");
     return NextResponse.redirect(url);
   }
 

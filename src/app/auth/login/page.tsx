@@ -3,7 +3,7 @@ import GoogleLoginButton from "./GoogleLoginButton";
 export const dynamic = "force-dynamic";
 
 const ERRORS: Record<string, string> = {
-  domain: "That account isn't an @iniushop.com address. Sign in with your company account.",
+  unauthorized: "This account isn't authorized. Ask the admin to add you to the access list.",
   auth_failed: "Sign-in failed. Please try again.",
 };
 
@@ -24,7 +24,7 @@ export default async function LoginPage({
         </div>
         {msg ? <div className="login-error">{msg}</div> : null}
         <GoogleLoginButton />
-        <p className="login-note">@iniushop.com accounts only</p>
+        <p className="login-note">Authorized accounts only</p>
       </div>
     </div>
   );

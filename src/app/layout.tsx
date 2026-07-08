@@ -3,6 +3,7 @@ import "./globals.css";
 import Sidebar from "./Sidebar";
 import { getSupabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/server";
+import { isAllowedEmail } from "@/lib/access";
 
 export const metadata: Metadata = {
   title: "Competitive Tracker",
@@ -41,7 +42,7 @@ export default async function RootLayout({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const authed = !!user?.email && user.email.toLowerCase().endsWith("@iniushop.com");
+  const authed = isAllowedEmail(user?.email);
 
   return (
     <html lang="en">

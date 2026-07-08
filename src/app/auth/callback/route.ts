@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { isAllowedEmail } from "@/lib/access";
 import { NextResponse } from "next/server";
-
-const ALLOWED_DOMAIN = "iniushop.com";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -14,11 +13,10 @@ export async function GET(request: Request) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const email = (user?.email ?? "").toLowerCase();
-      // Hard domain gate: reject + sign out any non-company account.
-      if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+      // Hard gate: reject + sign out any account not on the allow-list.
+      if (!isAllowedEmail(user?.email)) {
         await supabase.auth.signOut();
-        return NextResponse.redirect(`${origin}/auth/login?error=domain`);
+        return NextResponse.redirect(`${origin}/auth/login?error=unauthorized`);
       }
       return NextResponse.redirect(`${origin}/`);
     }

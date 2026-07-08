@@ -86,7 +86,11 @@ add/remove a channel by toggling `is_enabled` here; `run_scrape_raw.py` reads it
 - Legacy views `v_dashboard_latest`, `v_dashboard_history`, `v_review_queue`,
   `v_iniu_competitive_matrix` exist from the initial schema but the app does **NOT** use them
   (it queries base tables directly). Safe to ignore / eventually drop.
-- RLS is ON everywhere; policies allow `authenticated`; the app uses service-role (bypasses RLS).
+- RLS is ON everywhere and **locked down (2026-07-08)**: the broad `authenticated`/`anon` policies
+  were DROPPED, so no anon or authenticated role can read/write any table or view directly (verified
+  0 rows for both). The ONLY data path is the **service-role** client (server-side, behind the
+  email-allow-list middleware). Do NOT re-add `to authenticated`/`to anon` policies — that reopens a
+  direct-REST hole that bypasses the app gate. Views use `security_invoker=on` so base-table RLS applies.
 
 ## How to run locally → upload competitive data to cloud (operator runbook)
 All pipeline scripts run from the **parent project root** (`~/Desktop/competitive追踪`), not this

@@ -1,0 +1,210 @@
+<style>
+  :root{
+    --ground:#f5f8f7;--surface:#ffffff;--panel:#fbfdfc;--ink:#13201e;--muted:#6a7a77;--faint:#93a3a0;
+    --line:#e3eae8;--line-soft:#eef3f2;--accent:#0e9b90;--accent-ink:#0a5f58;--accent-wash:#e3f4f2;
+    --comp:#3f5a86;--comp-wash:#eef2f8;--opp:#b57a12;
+    --shadow:0 1px 2px rgba(19,32,30,.05),0 8px 24px rgba(19,32,30,.05);
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --ground:#0d1312;--surface:#131b1a;--panel:#0f1716;--ink:#e8efee;--muted:#93a3a0;--faint:#66756f;
+    --line:#26302e;--line-soft:#1a2221;--accent:#2fd4c6;--accent-ink:#8ff0e6;--accent-wash:#12312d;
+    --comp:#9db4dd;--comp-wash:#182130;--opp:#e0a83a;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  }}
+  :root[data-theme="light"]{--ground:#f5f8f7;--surface:#ffffff;--panel:#fbfdfc;--ink:#13201e;--muted:#6a7a77;--faint:#93a3a0;--line:#e3eae8;--line-soft:#eef3f2;--accent:#0e9b90;--accent-ink:#0a5f58;--accent-wash:#e3f4f2;--comp:#3f5a86;--comp-wash:#eef2f8;--opp:#b57a12;--shadow:0 1px 2px rgba(19,32,30,.05),0 8px 24px rgba(19,32,30,.05)}
+  :root[data-theme="dark"]{--ground:#0d1312;--surface:#131b1a;--panel:#0f1716;--ink:#e8efee;--muted:#93a3a0;--faint:#66756f;--line:#26302e;--line-soft:#1a2221;--accent:#2fd4c6;--accent-ink:#8ff0e6;--accent-wash:#12312d;--comp:#9db4dd;--comp-wash:#182130;--opp:#e0a83a;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35)}
+  *{box-sizing:border-box}
+  .rm{font-family:var(--sans);color:var(--ink);background:var(--ground);-webkit-font-smoothing:antialiased;padding:20px;max-width:1340px;margin:0 auto;font-size:14px;line-height:1.4}
+  .rm-head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:16px}
+  .rm-eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);font-weight:650;margin-bottom:6px}
+  .rm h1{font-size:23px;font-weight:750;letter-spacing:-.02em;margin:0;text-wrap:balance}
+  .rm-sub{color:var(--muted);font-size:13px;margin:5px 0 0;max-width:66ch}
+  .rm-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600;margin-right:2px}
+  .tabs{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;box-shadow:var(--shadow)}
+  .tab{border:0;background:transparent;font:inherit;font-size:13px;font-weight:600;color:var(--muted);padding:7px 12px;border-radius:7px;cursor:pointer;transition:.15s}
+  .tab:hover{color:var(--ink)} .tab[aria-selected="true"]{background:var(--comp);color:#fff} .tab.iniu[aria-selected="true"]{background:var(--accent)}
+  .btn{font:inherit;font-size:13px;font-weight:650;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 13px;border-radius:9px;cursor:pointer;box-shadow:var(--shadow);display:inline-flex;gap:6px;align-items:center}
+  .btn:hover{border-color:var(--faint)} .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff} .btn.ghost{border-color:transparent;background:transparent;box-shadow:none;color:var(--muted)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 15px;box-shadow:var(--shadow)}
+  .stat .k{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .stat .v{font-family:var(--mono);font-size:21px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+  .stat .d{font-size:11.5px;color:var(--faint);margin-top:2px} .stat.good .v{color:var(--accent-ink)} .stat.warn .v{color:var(--opp)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+  .panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:11px 18px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+  .panel-head h2{font-size:14px;font-weight:700;margin:0}
+  .legend{display:flex;gap:15px;font-size:12px;color:var(--muted)} .legend b{display:inline-flex;align-items:center;gap:6px;font-weight:500}
+  .dot{width:9px;height:9px;border-radius:3px}.dot.iniu{background:var(--accent)}.dot.comp{background:var(--comp)}
+  .editbar{display:none;align-items:center;gap:12px;padding:8px 18px;background:var(--accent-wash);border-bottom:1px solid var(--line-soft);font-size:12.5px;color:var(--accent-ink);font-weight:600}
+  .editing .editbar{display:flex}
+  .chart-scroll{overflow-x:auto;padding:6px} .chart{position:relative;user-select:none}
+  .axis-label{position:absolute;left:0;font-family:var(--mono);font-size:11px;color:var(--faint);transform:translateY(-50%);width:40px;text-align:right;font-variant-numeric:tabular-nums}
+  .grid{position:absolute;height:1px;background:var(--line-soft);pointer-events:none}
+  .col-head{position:absolute;top:0;text-align:center;font-size:12px;font-weight:700;color:var(--ink);pointer-events:none}
+  .card{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 8px;display:flex;gap:8px;align-items:flex-start;box-shadow:var(--shadow);transition:box-shadow .12s,transform .12s,left .18s ease,top .18s ease;touch-action:none}
+  .card.iniu{border-color:var(--accent);background:var(--accent-wash)} .card.comp{border-left:3px solid var(--comp)}
+  .card.dragging,.card.following{transition:box-shadow .12s}
+  .view .card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(19,32,30,.14);z-index:6}
+  .editing .card.iniu{cursor:grab} .editing .card.iniu:hover{border-color:var(--accent);box-shadow:0 4px 14px rgba(19,32,30,.16)}
+  .card.dragging{cursor:grabbing;z-index:20;box-shadow:0 12px 30px rgba(19,32,30,.22);transition:none}
+  .card.moved::after{content:"";position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:1.5px solid var(--surface)}
+  .thumb{flex:0 0 auto;width:26px;height:26px;border-radius:6px;background:var(--panel);border:1px solid var(--line-soft);display:flex;align-items:center;justify-content:center;color:var(--faint);margin-top:1px}
+  .card.iniu .thumb{color:var(--accent);border-color:var(--accent)} .thumb svg{width:15px;height:15px}
+  .c-body{min-width:0;flex:1} .c-top{display:flex;justify-content:space-between;gap:6px;align-items:baseline}
+  .c-name{font-size:11.5px;font-weight:600;line-height:1.2} .card.iniu .c-name{font-weight:700}
+  .c-price{flex:0 0 auto;font-family:var(--mono);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+  .card.iniu .c-price{color:var(--accent-ink)} .card.comp .c-price{color:var(--comp)}
+  .foot{color:var(--faint);font-size:11.5px;margin-top:13px;line-height:1.5}.foot b{color:var(--muted);font-weight:600}
+  @media (max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}.rm{padding:14px}}
+  @media (prefers-reduced-motion:reduce){.card{transition:none!important}}
+</style>
+
+<div class="rm view" id="root">
+  <div class="rm-head">
+    <div>
+      <div class="rm-eyebrow">Market · Competitive intelligence</div>
+      <h1>Product Roadmap — INIU-anchored</h1>
+      <p class="rm-sub">INIU's lineup is the backbone. Each competitor is pinned to the INIU product it's mapped to — so when you drag an INIU card, its rivals travel with it. Height = price; pick a brand to reveal its layer.</p>
+    </div>
+    <div class="rm-controls">
+      <span class="lbl">Layer</span><div class="tabs" id="tabs" role="tablist"></div>
+      <button class="btn" id="editBtn">✎ Arrange INIU</button>
+    </div>
+  </div>
+  <section class="stats" id="stats"></section>
+  <section class="panel">
+    <div class="panel-head"><h2 id="panelTitle">INIU lineup</h2>
+      <div class="legend"><b><span class="dot iniu"></span>INIU (anchor)</b><b><span class="dot comp"></span>Competitor (follows its anchor)</b></div></div>
+    <div class="editbar"><span>✎ Drag an INIU card — its mapped competitors follow horizontally. Height stays = price.</span>
+      <button class="btn ghost" id="resetBtn" style="margin-left:auto">Reset</button><button class="btn primary" id="saveBtn">✓ Save</button></div>
+    <div class="chart-scroll"><div class="chart" id="chart"></div></div>
+  </section>
+  <p class="foot"><b>Demo — real data.</b> INIU backbone from <b>iniu_products</b>; each competitor pinned to its closest INIU product via <b>competitive_links</b>. RRP shown raw (live board normalises PLN→EUR and cleans names); image slot reserved on every card.</p>
+</div>
+
+<script>
+(function(){
+  var PB='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="6" width="15" height="12" rx="2.5"/><path d="M18 10h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2"/></svg>';
+  var COLS=['MagPro Slim','MagPro','Pocket Power','Pocket Neo','Pocket Pro','Leopard'];
+  var ANCHORS=[
+    {k:'MagPro Slim 10K',col:'MagPro Slim',p:58},{k:'MagPro Slim 5K',col:'MagPro Slim',p:50},
+    {k:'MagPro 10K',col:'MagPro',p:55},{k:'MagPro Neo 10K',col:'MagPro',p:50},
+    {k:'Pocket Power 20K',col:'Pocket Power',p:54},{k:'Pocket Power 10K',col:'Pocket Power',p:40},
+    {k:'Pocket Neo 20K',col:'Pocket Neo',p:35},{k:'Pocket Neo 10K',col:'Pocket Neo',p:27},
+    {k:'Pocket Pro 10K',col:'Pocket Pro',p:52},{k:'Pocket Pro Slim 10K',col:'Pocket Pro',p:52},
+    {k:'Leopard 140W',col:'Leopard',p:105},{k:'Leopard 100W',col:'Leopard',p:80},{k:'Leopard 65W',col:'Leopard',p:65}
+  ];
+  var AMAP={}; ANCHORS.forEach(function(a){AMAP[a.k]=a});
+  var COMP=[
+    {"a":"Pocket Power 10K","b":"anker","n":"Anker 10K 30W USB-C czarny","p":119},{"a":"Pocket Power 10K","b":"anker","n":"Anker Power Bank 10K 30W USB-C biały","p":119},{"a":"Pocket Power 10K","b":"anker","n":"Powerbank ANKER Zolo 10000 mAh 30W Czarny","p":110},{"a":"Pocket Pro 10K","b":"anker","n":"Anker Nano Powerbank 10.000 mAh mit 45 Watt und Schnellladefunktion Schwarz","p":110},{"a":"MagPro Slim 5K","b":"anker","n":"Anker MagGo Slim Wireless Powerbank mit MagSafe und Qi2 5.000 mAh mit Schnellladefunktion Schwarz","p":110},{"a":"Pocket Power 20K","b":"anker","n":"Anker PowerCore Powerbank 20.000 mAh Quick Charge und Power Delivery Schwarz","p":100},{"a":"Leopard 140W","b":"anker","n":"Batería externa Anker Power Bank 25000 mA/h plata","p":100},{"a":"Leopard 140W","b":"anker","n":"Anker Laptop Power Bank (25K, 165W, Built-In and Retractable Cables)","p":100},{"a":"Pocket Power 20K","b":"anker","n":"Powerbank ANKER Zolo 20000 mAh 30W Czarny","p":99},{"a":"MagPro Slim 10K","b":"anker","n":"Anker MagGo Power Bank (10K)","p":94},{"a":"MagPro Slim 10K","b":"anker","n":"Anker Wireless Powerbank Schwarz mit MagSafe und Qi2 Magnet 10.000 mAh mit Schnellladen","p":90},{"a":"MagPro Slim 10K","b":"anker","n":"Anker Wireless Powerbank mit MagSafe und Qi2 Magnet 10.000 mAh mit Schnellladen Weiß","p":90},{"a":"Pocket Power 10K","b":"anker","n":"Anker Zolo Power Bank 10000 mAh czarny","p":89},{"a":"Pocket Power 10K","b":"anker","n":"Anker Zolo Power Bank 10000 mAh biały","p":89},{"a":"MagPro 10K","b":"anker","n":"Anker MagGo Power Bank (10K, 35W, For Apple Watch)","p":82},{"a":"MagPro Slim 10K","b":"anker","n":"Anker MagGo Powerbank mit Schnellladefunktion 10.000 mAh Weiß","p":70},{"a":"MagPro Slim 10K","b":"anker","n":"Anker MagGo Power Bank (10K, Slim)","p":70},{"a":"MagPro 10K","b":"anker","n":"Anker 633 Magnetic Battery","p":60},{"a":"Pocket Power 20K","b":"anker","n":"Anker 525 Power Bank (PowerCore 20K)","p":55},{"a":"Pocket Power 10K","b":"anker","n":"Anker Nano Powerbank 10.000 mAh mit Schnellladefunktion Schwarz","p":50},{"a":"Pocket Power 10K","b":"anker","n":"Anker Nano Power Bank (30W, Built-In USB-C Cable)","p":50},{"a":"MagPro 10K","b":"anker","n":"Anker 533 Wireless Power Bank (PowerCore 10K)","p":50},{"a":"Pocket Neo 20K","b":"anker","n":"Anker 335 Power Bank (PowerCore 20K)","p":40},{"a":"Pocket Neo 20K","b":"anker","n":"Anker 325 Power Bank (PowerCore 20K)","p":40},{"a":"Pocket Neo 10K","b":"anker","n":"Anker 313 Power Bank (PowerCore 10K)","p":30},
+    {"a":"Leopard 65W","b":"belkin","n":"3-Port Laptop Power Bank 20K","p":90},{"a":"MagPro 10K","b":"belkin","n":"Power Bank 10K with Magnetic Ring","p":80},{"a":"MagPro Slim 5K","b":"belkin","n":"Magnetic Power Bank with Qi2 15W 5K","p":73},{"a":"MagPro Slim 5K","b":"belkin","n":"Magnetic Wireless Power Bank 5K + Stand","p":70},{"a":"MagPro Slim 10K","b":"belkin","n":"Batterie Externe Belkin 10000 Mah 15W Magsafe Avec Support","p":70},{"a":"Pocket Power 10K","b":"belkin","n":"10K USB-C Power Bank with Integrated Cables","p":63},{"a":"Pocket Power 20K","b":"belkin","n":"Batterie Externe Belkin 20000 Mah 20W Usb-C Et Usb-A Noir","p":60},{"a":"Pocket Power 10K","b":"belkin","n":"Power Bank Belkin USB-C - Lightning 10K con cables integrados","p":60},{"a":"Pocket Power 10K","b":"belkin","n":"10K USB-C Power Bank with Integrated Cables","p":60},{"a":"MagPro Slim 5K","b":"belkin","n":"Slim Magnetic Power Bank 5K","p":58},{"a":"Pocket Power 20K","b":"belkin","n":"Powerbank - Belkin BPB024hqPK, 20000 mAh, 1x USB-C, Cable Integrado, Carga Rápida, 30W, Rosa","p":58},{"a":"MagPro Slim 10K","b":"belkin","n":"Batterie Externe Belkin 10000 Mah 15W Magsafe Avec Support","p":55},{"a":"Pocket Neo 20K","b":"belkin","n":"Powerbank - Belkin BPB012, 20000 mAh, USB tipo C, USB tipo A, Negro","p":53},{"a":"MagPro Slim 5K","b":"belkin","n":"Magnetic Power Bank with Qi2 15W 5K","p":50},{"a":"Pocket Power 10K","b":"belkin","n":"Power Bank 10K with Display","p":48},{"a":"Pocket Power 20K","b":"belkin","n":"Batterie Externe Belkin 20000 Mah Avec Cable Usb-C Integre Noir","p":45},{"a":"MagPro Slim 5K","b":"belkin","n":"Magnetic Wireless Power Bank 5K + Stand","p":45},{"a":"Pocket Neo 20K","b":"belkin","n":"Batterie Externe Belkin 20 000 Mah Grise","p":40},{"a":"Pocket Neo 20K","b":"belkin","n":"Power Bank Celly 20K oro rosa","p":40},{"a":"Pocket Neo 20K","b":"belkin","n":"Power Bank Belkin 20K de 15W USB-C + 2 USB-A azul","p":40},{"a":"Pocket Neo 20K","b":"belkin","n":"Power Bank 20K (30W) for Nintendo Switch 2","p":35},{"a":"Pocket Neo 10K","b":"belkin","n":"Power Bank 10K with Integrated Cable","p":30},{"a":"Pocket Neo 10K","b":"belkin","n":"Power Bank 10K","p":30},{"a":"Pocket Neo 20K","b":"belkin","n":"Batterie Externe Belkin 20000 Mah Avec Cable Usb-C Integre Bleu","p":30},{"a":"Pocket Neo 10K","b":"belkin","n":"Power Bank 10K with Integrated Cable","p":25},{"a":"Pocket Neo 10K","b":"belkin","n":"Power Bank 10K with Display","p":25},{"a":"Pocket Neo 10K","b":"belkin","n":"Power Bank 10K","p":23},{"a":"Pocket Neo 20K","b":"belkin","n":"Batterie Externe Belkin 20000 Mah 15W Usb-C Et Usb-A","p":23},{"a":"Pocket Neo 10K","b":"belkin","n":"Power Bank 10K with Integrated Cable","p":17},{"a":"Pocket Neo 10K","b":"belkin","n":"Power Bank 10K","p":15},
+    {"a":"MagPro Slim 5K","b":"cellularline","n":"Powerbank indukcyjny CELLULARLINE Mag 5000mAh 7.5W Czarny","p":120},{"a":"MagPro Slim 5K","b":"cellularline","n":"Powerbank indukcyjny CELLULARLINE Mag 5000mAh 7.5W Niebieski","p":120},{"a":"MagPro Slim 5K","b":"cellularline","n":"Mag Airy 5.000 Qi2 25W","p":103},{"a":"Leopard 65W","b":"cellularline","n":"Power Bank Roller 20000","p":103},{"a":"Leopard 65W","b":"cellularline","n":"Rocket 20000","p":100},{"a":"Pocket Power 20K","b":"cellularline","n":"Powerbank CELLULARLINE Essence 20000mAh PD 20W Szary","p":100},{"a":"Leopard 65W","b":"cellularline","n":"Shade Laptop 20000","p":100},{"a":"Pocket Power 20K","b":"cellularline","n":"Power Bank ESSENCE 20000","p":90},{"a":"Pocket Power 10K","b":"cellularline","n":"Powerbank CELLULARLINE Thunder 10000 mAh 20W Czerwony","p":82},{"a":"Pocket Power 10K","b":"cellularline","n":"Powerbank CELLULARLINE Essence 10000mAh PD 20W Szary","p":80},{"a":"Pocket Power 10K","b":"cellularline","n":"Ultron 10000","p":70},{"a":"Pocket Power 20K","b":"cellularline","n":"POWER BANK SOLAR PRO 1 ETFE SOLAR PANEL 1.5W 20000 MAH 20W DUAL USB A+C PORT ORANGE","p":70},{"a":"Pocket Power 10K","b":"cellularline","n":"Mag Lite 10000","p":70},{"a":"MagPro Slim 10K","b":"cellularline","n":"Power Bank Mag Stand 10.000 Qi2 15W","p":70},{"a":"MagPro Slim 5K","b":"cellularline","n":"Power Bank Mag Stand 5.000 Qi2 15W","p":60},{"a":"Pocket Power 10K","b":"cellularline","n":"POWER BANK SOLAR PRO 1 ETFE SOLAR PANEL 1.5W 10000 MAH 20W DUAL USB A+C PORT ORANGE","p":60},{"a":"MagPro Slim 10K","b":"cellularline","n":"PowerBank - CellularLine MAG 10000, Para Apple, 18 W, MagSafe, USB - C, Negro","p":58},{"a":"Pocket Pro 10K","b":"cellularline","n":"Power Bank Roller 10000","p":55},{"a":"Pocket Power 20K","b":"cellularline","n":"Elite 20000","p":55},{"a":"Pocket Power 10K","b":"cellularline","n":"Fast PD 10000","p":53},{"a":"Pocket Power 10K","b":"cellularline","n":"LINC-C","p":50},{"a":"MagPro Slim 5K","b":"cellularline","n":"Wireless Power Bank MAG 5000","p":50},{"a":"Pocket Power 10K","b":"cellularline","n":"Elite 10000","p":45},{"a":"Pocket Power 10K","b":"cellularline","n":"Power Bank Glam","p":45},{"a":"Pocket Power 20K","b":"cellularline","n":"ESSENCE TURBO 20000","p":45},{"a":"Pocket Power 20K","b":"cellularline","n":"Fast PD 20000","p":45},{"a":"Pocket Pro 10K","b":"cellularline","n":"PowerView IQ Power Bank 10.000","p":45},{"a":"MagPro Slim 5K","b":"cellularline","n":"Power Bank Magsafe 5000","p":40},{"a":"Pocket Power 10K","b":"cellularline","n":"Power Bank 10000","p":40},{"a":"Pocket Power 10K","b":"cellularline","n":"Powerbank CELLULARLINE Thunder 10000 mAh 20W Niebieski","p":40},{"a":"Pocket Power 10K","b":"cellularline","n":"10,000 mAh Power Bank","p":35},{"a":"Pocket Power 10K","b":"cellularline","n":"ESSENCE TURBO 10000","p":35},{"a":"Pocket Neo 20K","b":"cellularline","n":"Power Bank 20000","p":30},{"a":"Pocket Neo 20K","b":"cellularline","n":"Power Bank Essential 20.000","p":30},{"a":"Pocket Neo 10K","b":"cellularline","n":"Power Bank Essential 10.000","p":20}
+  ];
+  function cleanName(n){var s=n.replace(/power ?bank/ig,'').replace(/batterie externe|batería externa|powerbank/ig,'').replace(/belkin|anker|cellularline|celly/ig,'').replace(/\b(noir|blanc|czarny|biały|schwarz|weiß|weiss|negro|plata|szary|niebieski|bleu|grise|oro rosa|rosa|silber|srebrny|zielony|czerwony|orange|blue|black|white|para apple)\b/ig,'').replace(/[,–\-]+/g,' ').replace(/\s+/g,' ').trim();return s.length>3?s:n;}
+  var BRANDS=[...new Set(COMP.map(function(r){return r.b}))].sort();
+
+  var root=document.getElementById('root'),chart=document.getElementById('chart'),statsEl=document.getElementById('stats'),
+      tabsEl=document.getElementById('tabs'),titleEl=document.getElementById('panelTitle'),
+      editBtn=document.getElementById('editBtn'),saveBtn=document.getElementById('saveBtn'),resetBtn=document.getElementById('resetBtn');
+  var layer='INIU',editing=false,POS={};
+  try{POS=JSON.parse(localStorage.getItem('roadmap_anchor_pos')||'{}')}catch(e){}
+  function savePOS(){try{localStorage.setItem('roadmap_anchor_pos',JSON.stringify(POS))}catch(e){}}
+
+  var MINP=12,MAXP=130,H=560,PADT=34,GAP=6,axisW=44,colGap=16;
+  function yOf(p){return PADT+(MAXP-Math.max(MINP,Math.min(MAXP,p)))/(MAXP-MINP)*H}
+  function eur(n){return '€'+n} function cap(s){return s.charAt(0).toUpperCase()+s.slice(1)}
+  var colW=190;
+  function colX(col){return axisW+COLS.indexOf(col)*(colW+colGap)}
+  function anchorX(k){var ov=POS[k];return ov?ov.x:colX(AMAP[k].col)}
+
+  function render(){
+    root.className='rm '+(editing?'editing':'view');
+    var showBrand=layer!=='INIU';
+    titleEl.textContent=showBrand?('INIU  vs  '+cap(layer)):'INIU lineup';
+    var comp=showBrand?COMP.filter(function(r){return r.b===layer}):[];
+
+    if(showBrand){
+      var prices=comp.map(function(r){return r.p});
+      var under=comp.filter(function(r){return AMAP[r.a] && r.p<AMAP[r.a].p}).length;
+      var cols=new Set(comp.map(function(r){return AMAP[r.a]?AMAP[r.a].col:'?'})).size;
+      statInfo([['Competitor SKUs',comp.length,'mapped to INIU',''],['Price range',eur(Math.min.apply(null,prices))+'–'+eur(Math.max.apply(null,prices)),'catalogue RRP',''],
+        ['Undercut INIU',under,'priced below its anchor','warn'],['Segments hit',cols+' / 6','INIU columns',''],['Cheapest',eur(Math.min.apply(null,prices)),cap(layer)+' entry','good']]);
+    } else {
+      statInfo([['INIU series',COLS.length,'columns',''],['INIU SKUs',ANCHORS.length,'anchors',''],['Price band','€27–€105','own RRP',''],['Mapped rivals',COMP.length,'across 3 brands',''],['Pick a layer','→','select a brand','good']]);
+    }
+
+    var avail=(chart.parentElement.clientWidth||1160)-12; if(avail<260)avail=1160;
+    colW=Math.max(160,Math.min(230,(avail-axisW-(COLS.length-1)*colGap)/COLS.length));
+    var totalW=axisW+COLS.length*colW+(COLS.length-1)*colGap;
+    chart.style.width=Math.max(totalW,avail)+'px';
+
+    var html='';
+    for(var t=20;t<=120;t+=20){var y=yOf(t);html+='<div class="grid" style="top:'+y+'px;left:'+axisW+'px;width:'+(totalW-axisW)+'px"></div><div class="axis-label" style="top:'+y+'px">€'+t+'</div>';}
+    COLS.forEach(function(c){html+='<div class="col-head" style="left:'+colX(c)+'px;width:'+colW+'px">'+c+'</div>';});
+
+    // build cards: anchors + competitors (competitor.x follows its anchor)
+    var cards=[];
+    ANCHORS.forEach(function(a){var ov=POS[a.k];cards.push({iniu:true,key:a.k,n:a.k,p:a.p,x:ov?ov.x:colX(a.col),y:ov?ov.y:yOf(a.p),moved:!!ov});});
+    if(showBrand)comp.forEach(function(r){cards.push({iniu:false,anchor:r.a,n:cleanName(r.n),p:r.p,x:anchorX(r.a),y:yOf(r.p),moved:false});});
+
+    cards.forEach(function(cd,idx){
+      cd.id=idx;
+      html+='<div class="card '+(cd.iniu?'iniu':'comp')+(cd.moved?' moved':'')+'" data-id="'+idx+'" data-x="'+Math.round(cd.x)+'" data-price="'+cd.p+'" data-moved="'+(cd.moved?1:0)+'"'
+        +(cd.iniu?' data-key="'+cd.key.replace(/"/g,'')+'"':' data-anchor="'+(cd.anchor||'')+'"')
+        +' style="left:'+cd.x+'px;top:'+cd.y+'px;width:'+colW+'px">'
+        +'<div class="thumb" title="product image">'+PB+'</div>'
+        +'<div class="c-body"><div class="c-top"><span class="c-name">'+cd.n+'</span><span class="c-price">'+eur(cd.p)+'</span></div></div></div>';
+    });
+    chart.innerHTML=html;
+
+    // collision: group NON-moved cards by x, stack by price; moved cards keep exact pos
+    var groups={},maxB=PADT+H;
+    [].slice.call(chart.querySelectorAll('.card[data-moved="0"]')).forEach(function(el){var gx=el.dataset.x;(groups[gx]=groups[gx]||[]).push(el);});
+    Object.keys(groups).forEach(function(gx){
+      var g=groups[gx].sort(function(a,b){return parseFloat(b.dataset.price)-parseFloat(a.dataset.price)});
+      var prev=-1e9;
+      g.forEach(function(el){var h=el.offsetHeight;var top=Math.max(yOf(parseFloat(el.dataset.price))-h/2,prev+GAP);el.style.top=top+'px';prev=top+h;if(top+h>maxB)maxB=top+h;});
+    });
+    [].slice.call(chart.querySelectorAll('.card[data-moved="1"]')).forEach(function(el){var b=parseFloat(el.style.top)+el.offsetHeight;if(b>maxB)maxB=b;});
+    chart.style.height=(maxB+16)+'px';
+    if(editing)wireDrag();
+  }
+
+  function statInfo(a){statsEl.innerHTML=a.map(function(s){return '<div class="stat'+(s[3]?' '+s[3]:'')+'"><div class="k">'+s[0]+'</div><div class="v">'+s[1]+'</div><div class="d">'+s[2]+'</div></div>'}).join('')}
+
+  function wireDrag(){
+    chart.querySelectorAll('.card.iniu').forEach(function(card){
+      card.addEventListener('pointerdown',function(e){
+        if(!editing)return; e.preventDefault();
+        var cr=chart.getBoundingClientRect(),ox=e.clientX-card.offsetLeft-cr.left,oy=e.clientY-card.offsetTop-cr.top,key=card.dataset.key;
+        card.classList.add('dragging');card.setPointerCapture(e.pointerId);
+        // live-follow competitors of this anchor while dragging
+        var followers=[].slice.call(chart.querySelectorAll('.card.comp[data-anchor="'+key+'"]'));
+        function mv(ev){
+          var nx=Math.max(0,Math.min(ev.clientX-cr.left-ox,chart.clientWidth-card.offsetWidth)),ny=Math.max(0,Math.min(ev.clientY-cr.top-oy,chart.clientHeight-card.offsetHeight));
+          card.style.left=nx+'px';card.style.top=ny+'px';
+          followers.forEach(function(el){el.style.left=nx+'px';});
+        }
+        function up(){card.classList.remove('dragging');POS[key]={x:parseFloat(card.style.left),y:parseFloat(card.style.top)};savePOS();card.removeEventListener('pointermove',mv);card.removeEventListener('pointerup',up);render();}
+        card.addEventListener('pointermove',mv);card.addEventListener('pointerup',up);
+      });
+    });
+    // tag competitor cards with their anchor for live-follow
+    // (anchor stored via nearest data — rebuild map from COMP by name match is unreliable; use dataset set at render)
+  }
+
+  [['INIU','INIU only',true]].concat(BRANDS.map(function(b){return [b,cap(b),false]})).forEach(function(t){
+    var el=document.createElement('button');el.className='tab'+(t[2]?' iniu':'');el.textContent=t[1];el.setAttribute('role','tab');
+    el.setAttribute('aria-selected',t[0]===layer?'true':'false');
+    el.onclick=function(){layer=t[0];[].forEach.call(tabsEl.children,function(c,idx){c.setAttribute('aria-selected',(idx===0?'INIU':BRANDS[idx-1])===layer?'true':'false')});render();};
+    tabsEl.appendChild(el);
+  });
+  editBtn.onclick=function(){editing=true;render()};
+  saveBtn.onclick=function(){editing=false;savePOS();render()};
+  resetBtn.onclick=function(){POS={};savePOS();render()};
+  var rt;window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(render,120)});
+  render();
+})();
+</script>
