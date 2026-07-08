@@ -13,7 +13,7 @@ type Counts = {
 
 const fmt = (n: number) => n.toLocaleString();
 
-export default function Sidebar({ counts }: { counts: Counts }) {
+export default function Sidebar({ counts, userEmail }: { counts: Counts; userEmail?: string | null }) {
   const path = usePathname();
   const is = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
@@ -48,6 +48,19 @@ export default function Sidebar({ counts }: { counts: Counts }) {
         {item("/reviews", "Reviews", counts.reviews)}
         {item("/first-pass", "First Pass", counts.firstPass)}
       </nav>
+
+      {userEmail ? (
+        <div className="sidebar-user">
+          <span className="sidebar-email" title={userEmail}>
+            {userEmail}
+          </span>
+          <form action="/auth/signout" method="post">
+            <button type="submit" className="signout-btn">
+              Sign out
+            </button>
+          </form>
+        </div>
+      ) : null}
     </aside>
   );
 }

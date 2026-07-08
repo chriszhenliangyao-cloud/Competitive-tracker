@@ -542,3 +542,40 @@ input:focus {
     padding-top: 24px;
   }
 }
+
+/* ── Auth: login screen + sidebar user/sign-out ─────────────────────────── */
+.sidebar { display: flex; flex-direction: column; }
+.sidebar-user { margin-top: auto; padding: 14px 10px 4px; border-top: 1px solid var(--border); }
+.sidebar-email {
+  display: block; font-size: 12px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px;
+}
+.signout-btn {
+  width: 100%; padding: 7px 10px; font-size: 13px; color: var(--foreground);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+}
+.signout-btn:hover { background: var(--subtle); }
+
+.login-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--background); padding: 20px;
+}
+.login-card {
+  width: min(400px, 100%); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; box-shadow: var(--shadow); padding: 34px 30px; text-align: center;
+}
+.login-brand strong { display: block; font-size: 20px; font-weight: 720; color: var(--foreground); }
+.login-brand span { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); margin-bottom: 22px; }
+.login-error {
+  font-size: 13px; color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 18px; text-align: left;
+}
+.google-btn {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 11px 16px; font-size: 14px; font-weight: 600; color: var(--foreground);
+  background: var(--surface); border: 1px solid var(--border-mid); border-radius: 10px; cursor: pointer;
+}
+.google-btn:hover:not(:disabled) { background: var(--subtle); }
+.google-btn:disabled { opacity: .6; cursor: default; }
+.login-note { margin-top: 18px; font-size: 12px; color: var(--muted); }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "./Sidebar";
 import { getSupabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Competitive Tracker",
@@ -36,16 +37,25 @@ async function getCounts() {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const counts = await getCounts();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const authed = !!user?.email && user.email.toLowerCase().endsWith("@iniushop.com");
+
   return (
     <html lang="en">
       <body>
-        <div className="app">
-          <Sidebar counts={counts} />
-          <main className="content">
-            <div className="content-inner">{children}</div>
-          </main>
-        </div>
+        {authed ? (
+          <div className="app">
+            <Sidebar counts={await getCounts()} userEmail={user!.email!} />
+            <main className="content">
+              <div className="content-inner">{children}</div>
+            </main>
+          </div>
+        ) : (
+          children
+        )}
       </body>
     </html>
   );

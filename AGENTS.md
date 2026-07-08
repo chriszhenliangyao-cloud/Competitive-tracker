@@ -23,7 +23,11 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
 - Local check before pushing: `npm run build` (Next 16.2.9, App Router, Turbopack, React 19).
 - `vercel.json` pins `{"framework":"nextjs"}` — **required**; without it Vercel served the root as
   404 (the project's Framework Preset was null). Don't remove it.
-- Vercel project `copetitive-tracker` (note the typo) → https://copetitive-tracker.vercel.app
+- Vercel project `copetitive-tracker` (repo name has the old typo) → live domain
+  **https://iniu-emea-competitive-tracker.vercel.app** (the old `copetitive-tracker.vercel.app` 404s;
+  note `competitive-tracker.vercel.app` is an UNRELATED project — not ours). Auth code uses
+  `window.location.origin`/request origin — no domain is hardcoded, so a future domain change needs
+  only the Supabase Auth **Site URL + Redirect URLs** updated, not code.
 - Supabase project ref `upoyfwfglymcubsuopfn`. See "Pipeline" for the parent-project scripts.
 
 ## Architecture
