@@ -62,6 +62,9 @@ export default function Sidebar({
 
       {userEmail ? (
         <div className="sidebar-user">
+          {userEmail.trim().toLowerCase() === "jiwen.wang@iniushop.com" ? (
+            <span className="user-crown" title="👑">👑</span>
+          ) : null}
           <span className="sidebar-email" title={userEmail}>
             {userEmail}
           </span>
