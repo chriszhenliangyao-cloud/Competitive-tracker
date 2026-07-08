@@ -127,7 +127,7 @@ export default function FirstPassTable({ rows }: { rows: FpRow[] }) {
                   </td>
                   <td>
                     {r.url ? (
-                      <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "#1d6fb8" }}>
+                      <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
                         {r.product_name || "—"} ↗
                       </a>
                     ) : (

@@ -147,7 +147,7 @@ export default function ReviewsTable({ rows, skuOptions }: { rows: ReviewRow[]; 
                     {r.product_name || r.listing?.raw_name || "—"}
                     {r.listing?.url ? (
                       <div className="sub">
-                        <a href={r.listing.url} target="_blank" rel="noreferrer" style={{ color: "#1d6fb8" }}>
+                        <a href={r.listing.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
                           source ↗
                         </a>
                       </div>

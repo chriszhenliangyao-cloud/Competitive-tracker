@@ -73,7 +73,7 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
     size: "Size",
     weight: "Weight",
   };
-  const barColor = (pct: number) => (pct >= 80 ? "#4caf6d" : pct >= 50 ? "#e0a32e" : "#d9645a");
+  const barColor = (pct: number) => (pct >= 80 ? "var(--good)" : pct >= 50 ? "var(--warn)" : "var(--danger)");
 
   return (
     <>
@@ -97,11 +97,11 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginTop: 14 }}>
           {summary.map((s) => (
             <div key={s.field}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#63707a", marginBottom: 5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--muted)", marginBottom: 5 }}>
                 <span>{label[s.field]}</span>
-                <strong style={{ color: "#172026" }}>{s.pct}%</strong>
+                <strong style={{ color: "var(--foreground)" }}>{s.pct}%</strong>
               </div>
-              <div style={{ height: 7, borderRadius: 4, background: "#edf0f2", overflow: "hidden" }}>
+              <div style={{ height: 7, borderRadius: 4, background: "var(--border-light)", overflow: "hidden" }}>
                 <div style={{ width: `${s.pct}%`, height: "100%", background: barColor(s.pct) }} />
               </div>
             </div>

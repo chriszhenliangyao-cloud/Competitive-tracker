@@ -3,7 +3,7 @@
 type Series = { label: string; points: { date: string; value: number }[] };
 
 const COLORS = [
-  "#237454",
+  "#0e9b90",
   "#1d6fb8",
   "#c4763a",
   "#8e44ad",
@@ -54,7 +54,7 @@ export default function PriceChart({ series }: { series: Series[] }) {
           const y = yFor(v);
           return (
             <g key={i}>
-              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#edf0f2" />
+              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="var(--border-light)" />
               <text x={padL - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#9aa6ae">
                 €{v.toFixed(0)}
               </text>

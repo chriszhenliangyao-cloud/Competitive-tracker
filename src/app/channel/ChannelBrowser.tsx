@@ -424,7 +424,7 @@ function Detail({ product, onBack }: { product: Product; onBack: () => void }) {
                 <tr key={l.id}>
                   <td>
                     {l.url ? (
-                      <a href={l.url} target="_blank" rel="noreferrer" style={{ color: "#1d6fb8" }}>
+                      <a href={l.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
                         {l.retailer} ↗
                       </a>
                     ) : (
