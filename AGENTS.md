@@ -139,6 +139,11 @@ python3 channel/run_scrape_raw.py                      # optional: --retailer fn
 ```
 Targets come from the `brand_retailer_targets` table (toggle `is_enabled` to add/remove a channel).
 `--date YYYY-MM-DD` overrides the cycle date; `--no-map` uploads raw without mapping.
+**Partial-scrape circuit breaker**: before upload/map, `run_scrape_raw` compares each
+(retailer,brand)'s scraped count to last cycle's active count and **holds back any pair that scraped
+abnormally short** (< 50% of prior when prior ≥ 6) so a blocked/partial scrape can't falsely delist
+its codes via map_cycle. A held-back pair is logged and simply not updated this cycle (recovers next
+full run). If a channel genuinely dropped a lot, re-run with `--force` to push it through.
 
 **Model A (current/legacy flow — map locally, then push mapped files):**
 ```bash

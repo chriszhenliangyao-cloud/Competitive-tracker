@@ -118,10 +118,15 @@ python channel/_supervise.py --stall-timeout 300 -- /opt/anaconda3/bin/python -u
   channel/run_scrape_raw.py
 ```
 Open caveats: (a) `run_scrape_raw` has no per-target resume yet — a supervisor restart re-scrapes
-from scratch (add resume like run_iniu_prices if the full run proves flaky). (b) A pair that scrapes
-0 rows is simply absent from raw → NOT delisted (safe); but a PARTIAL scrape still delists the
-missing rows — the Stage-C 0-row/partial circuit-breaker is still unbuilt. (c) xkom still returns 0
-(harmless: absent from raw, no false delist).
+from scratch, and it holds all raw rows in memory until the end (upload once). Add per-retailer
+incremental upload if the full run proves flaky. (b) DONE (2026-07-08): the Stage-C **partial-scrape
+circuit breaker** is built into `run_scrape_raw.py`. Before upload/map it compares each
+(retailer,brand)'s scraped count to last cycle's active count (`get_active_baseline` /
+`apply_circuit_breaker`): a pair scraping < `CB_FLOOR` (0.5) of prior when prior ≥ `CB_MIN_PRIOR` (6)
+is held back — its rows aren't uploaded, so map_cycle never sees the pair and can't delist its codes.
+A 0-row pair was already safe (absent from raw); it's now reported. A genuine whole-channel delist
+reads as 0/low too, so we never auto-delist on one short read — use `--force` (or it recovers next
+full cycle). (c) xkom returns 0 for some brands (harmless: absent from raw, no false delist).
 
 ## Review resolution — permanent, no new layers (2026-07-07)
 Principle (Chris): **we only moved storage Excel→SQL; the mapping logic is unchanged.** So don't
