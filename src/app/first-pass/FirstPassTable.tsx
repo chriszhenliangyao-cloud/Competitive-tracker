@@ -19,6 +19,7 @@ export type FpRow = {
   capacity: string | null;
   power: string | null;
   usb_ports: string | null;
+  mapped: boolean; // true → specs are canonical (from Library/products); false → raw scrape fallback
   scraped_date: string | null;
   brand: { display_name: string } | null;
   retailer: { display_name: string; country: string | null } | null;
@@ -53,7 +54,11 @@ export default function FirstPassTable({ rows }: { rows: FpRow[] }) {
       <header className="page-head">
         <div>
           <h1>First Pass</h1>
-          <p>Raw heavy-extraction scrape observations (calibration data).</p>
+          <p>
+            Per-channel registry keyed by retailer product code. Specs come from the mapped{" "}
+            <strong>Library</strong> product (single source of truth) — a Library edit shows here instantly.
+            Unmapped codes fall back to their raw scrape, marked <span className="fp-src raw">raw</span>.
+          </p>
         </div>
         <div className="pill">{rows.length} rows</div>
       </header>
@@ -113,6 +118,7 @@ export default function FirstPassTable({ rows }: { rows: FpRow[] }) {
                 <th>Code</th>
                 <th>Capacity</th>
                 <th>Power</th>
+                <th>Specs</th>
                 <th>Price</th>
                 <th>Promo</th>
                 <th>Stock</th>
@@ -145,6 +151,19 @@ export default function FirstPassTable({ rows }: { rows: FpRow[] }) {
                   <td className="muted">{r.retailer_product_code ?? "—"}</td>
                   <td>{r.capacity ?? "—"}</td>
                   <td>{r.power ?? "—"}</td>
+                  <td>
+                    {r.mapped ? (
+                      <span className="fp-src lib" title="Specs from the mapped Library product">
+                        Library
+                      </span>
+                    ) : r.capacity || r.power ? (
+                      <span className="fp-src raw" title="Unmapped code — specs are the raw scrape (unverified)">
+                        raw
+                      </span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
                   <td>{r.price != null ? fmtMoney(Number(r.price), r.currency) : "—"}</td>
                   <td className={r.promo_price != null ? "promo" : ""}>
                     {r.promo_price != null ? fmtMoney(Number(r.promo_price), r.currency) : "—"}

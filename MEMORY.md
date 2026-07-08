@@ -178,6 +178,29 @@ competitors sold there, on Dashboard / Channel / Roadmap.
   the INIU backbone columns stay the full lineup for everyone. Decision (Chris): the other four pages
   are **admin-only**, not country-scoped-for-sales.
 
+## First Pass reads canonical specs (single source of truth) (2026-07-08)
+Goal (Chris): the three modules (Library / First Pass / Reviews) must be consistent in real time —
+edit in one place, the others reflect it; and a scrape+map cycle must never scramble or clobber data.
+Audit result:
+- **Identity/mapping line already solid**: `resolve_review` writes BOTH `first_pass.sku` (code→sku
+  memory) and `listings.product_id` for the same (retailer, code), using the same `fp_norm_sku`
+  normalization as `map_cycle`. `map_cycle`'s cascade reads listings then first_pass (memory tier
+  highest), so a resolved code re-resolves to the same SKU every cycle — never returns to review,
+  never clobbered (`first_pass.sku = coalesce(this-cycle, existing)`). `map_cycle` only READS
+  `products` (never writes specs), so scraping can't scramble Library specs.
+- **The one drift fixed**: the First Pass page used to display `first_pass_observations`'s own frozen
+  `capacity/power/usb_ports` (heavy-scrape legacy; `map_cycle` never updates them). Proven stale — e.g.
+  the same SKU A1664H11 had `30W` at one retailer and `15W` at another; a code with frozen `"3 A"`
+  where Library correctly has no wired_power. Now First Pass resolves specs via the code's mapping
+  (`listings.product_id` → products; secondary exact-SKU) and shows canonical, with a "raw" fallback
+  badge for unmapped codes. Coverage: 522/664 canonical, 141 raw-fallback, 1 no-specs. A Library edit
+  now propagates to First Pass instantly. **The mapping resolution and the spec display are one logic**
+  (both anchored on retailer_product_code), so the three modules read one source.
+- **Cycle guardrail (must hold before enabling Library editing)**: Model-A `push_to_supabase`
+  overwrites `products` from local xlsx (and recomputes `sku_key` with the old rule, reverting the
+  Ugreen alignment). Once you edit Library in the cloud, do NOT run the Model-A library push or it
+  reverts your edits — `products` must be cloud-sourced (Model B). `map_cycle` itself is spec-safe.
+
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
   351 distinct listings — Model A `push_to_supabase` used a date-stamped `source_file` in the dedupe

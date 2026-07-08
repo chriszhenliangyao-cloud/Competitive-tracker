@@ -63,7 +63,7 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
 | `/iniu` | INIU catalogue; click → competitive comparison (General/Price tabs) + INIU own channel price; per-row **Hide/Unhide** curates competitors (writes `hidden_competitive_links`, "Show hidden" toggle) | iniu_products, competitive_links, hidden_competitive_links, price_snapshots, iniu_price_snapshots |
 | `/library` | Competitor SKU library (canonical specs) | products |
 | `/reviews` | Pending mapping reviews; **Resolve writes back** | mapping_reviews, listings |
-| `/first-pass` | Per-channel presence registry | first_pass_observations |
+| `/first-pass` | Per-channel registry keyed by retailer product code; specs resolved from the mapped `products` (canonical, "Library" badge) with raw scrape fallback ("raw" badge) | first_pass_observations, listings, products |
 
 ## FIELD OWNERSHIP — the consistency contract (do not violate)
 Every field has ONE home table. Every view JOINs to the home; editing writes the home.
@@ -86,9 +86,13 @@ Every field has ONE home table. Every view JOINs to the home; editing writes the
 > durable analog of the old local dashboard, whose only *persistent* competitor removal edited the
 > INIU spec xlsx directly (its cosmetic "exclude" toggle stored nothing). See MEMORY.md → hide.
 
-> Known duplication to remove: `first_pass_observations` still carries its own spec columns
-> (legacy from heavy scrape). The First Pass page must display specs **JOINed from `products`**
-> (by SKU), not its own copy, so a Library edit propagates everywhere. See MEMORY.md → editing.
+> DONE (2026-07-08): the First Pass page no longer displays `first_pass_observations`'s own
+> (frozen, legacy) spec columns. It resolves each row to its canonical `products` row the same way
+> `map_cycle` does — **primary = the code's `listings.product_id`** (the mapping outcome), secondary =
+> exact SKU for legacy rows with no listing — and shows those specs (badge "Library"); unmapped codes
+> fall back to the raw scrape (badge "raw"). So a Library edit propagates to First Pass instantly. The
+> legacy spec columns remain in the table but are only the unmapped fallback; `map_cycle` never writes
+> them. (Do not re-point First Pass at its own spec columns.)
 
 ## Supabase — key tables
 `brands, retailers, categories` (dimensions) · `products` (competitor library) ·

@@ -390,6 +390,12 @@ tr.row-hidden td {
 tr.row-hidden td .sub {
   color: var(--muted);
 }
+.fp-src {
+  display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.03em; border-radius: 5px; padding: 1px 6px; white-space: nowrap;
+}
+.fp-src.lib { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
+.fp-src.raw { background: var(--subtle); color: var(--warn); border: 1px solid var(--border-mid); }
 
 /* ---------- Badges / status ---------- */
 .badge {
