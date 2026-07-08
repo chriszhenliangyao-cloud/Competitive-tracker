@@ -100,11 +100,10 @@ closing the full loop. What was prepared and verified:
 - **Engine parity proven** (shadow test, rolled back): fed all 988 current listings back through
   `map_cycle` → **987/987 identical** to the local mapper, +2 extra maps via the page-SKU tier
   (map_cycle has it, local doesn't). Zero regressions.
-- **Fixed 1 normalization divergence**: `products.sku_key` was stored with a different rule than
-  map_cycle's `fp_norm_sku` (only the malformed SKU `Ugreen 25742`: `EEN 25742` vs `EEN25742`).
-  Realigned all 548 `products.sku_key = fp_norm_sku(sku, brand)`. CAVEAT: a Model-A `push_to_supabase
-  --scope library-firstpass` recomputes sku_key with the old rule and would revert this one SKU —
-  either stop re-pushing library, make push use fp_norm_sku, or clean the `Ugreen 25742` SKU.
+- **Fixed 1 normalization divergence** (superseded 2026-07-08, see "SKU normalization" below):
+  `products.sku_key` was stored with a different rule than map_cycle's `fp_norm_sku` (the malformed
+  SKU `Ugreen 25742`). Realigned all 548 sku_key. The malformed row is now merged away and
+  `fp_norm_sku` is brand-aware, so this specific divergence no longer exists.
 - **Loop closed**: `resolve_review` writes decisions into first_pass; map_cycle reads it next cycle.
 - **Guards live**: own-brand skip, review dedupe trigger.
 
@@ -200,6 +199,30 @@ Audit result:
   overwrites `products` from local xlsx (and recomputes `sku_key` with the old rule, reverting the
   Ugreen alignment). Once you edit Library in the cloud, do NOT run the Model-A library push or it
   reverts your edits — `products` must be cloud-sourced (Model B). `map_cycle` itself is spec-safe.
+
+## SKU normalization is brand-aware (fp_norm_sku ports the per-brand rules) (2026-07-08)
+The match key `fp_norm_sku(sku, bkey)` used to only special-case Ugreen (strip 3-char `UGR`), which
+(a) mangled the malformed `Ugreen 25742` → `EEN25742` (the "UGR" heuristic ate the brand word
+`UGREEN`), and (b) didn't collapse other variant forms. The parent project's per-brand SKU rules
+live in `channel/scrapers/sku_rules.py` (`clean_<brand>_sku`: strip brand prefix + strict regex,
+applied at SCRAPE time) plus `apply_mapping_review.sku_key` / `generate_dashboard.canonical_display`
+(match/display: belkin case-fold + ugreen UGR). The comprehensive charger set is in `插头/` — a
+SEPARATE charger pipeline, not ours. Cloud only had the thin Ugreen rule.
+- **Fixed**: `fp_norm_sku` now ports all powerbank brand prefixes into the single DB normalizer so the
+  match key is self-sufficient (doesn't depend on upstream Python cleaning that won't run for
+  cloud-entered SKUs): ugreen (UGREEN/UGR/UG before a digit → bare, keep trailing colour letter),
+  baseus (BASEUS only — NOT bare "BS", which is a real model prefix e.g. `BS-CH001`), belkin,
+  cellularline, sbs, xtorm, xline, anker, fresh-n-rebel (FRESHNREBEL/FNR). Deliberately NOT stripped:
+  hyphens (Baseus `P…-00`) and trailing colour letters (Ugreen `35524` vs `35524B` are DISTINCT rows).
+- **Validated**: 0 new collisions, **0 key changes on existing data** (every current library SKU was
+  already clean — my full scan found exactly one dirty row, the Ugreen one) → zero regression; the
+  rules are purely forward-looking robustness for Model B cloud editing. `map_cycle` + `resolve_review`
+  call `fp_norm_sku` so they inherit it automatically.
+- **Merged the one dirty duplicate**: `Ugreen 25742` (id 499, an empty stub with 1 listing, no specs)
+  → the clean `25742` (id 463, full specs). Repointed listing 198 + first_pass 116, deleted 499. That
+  listing now shows canonical specs instead of a blank stub. This removes the old Model-A-push caveat
+  for that row (it's gone); the general guardrail (don't run Model-A library push once editing in the
+  cloud) still stands. DB-only migration (`fp_norm_sku_all_brand_prefixes_v2`); no web code change.
 
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
