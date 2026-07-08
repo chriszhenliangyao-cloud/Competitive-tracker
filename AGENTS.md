@@ -46,9 +46,9 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
 ## Pages (and what each reads)
 | Route | Purpose | Main tables |
 |---|---|---|
-| `/` | **Prices by Country** — INIU vs mapped competitors, per-retailer price history + trend; INIU's own price is the first row | iniu_products, competitive_links→products, price_snapshots, iniu_price_snapshots |
+| `/` | **Prices by Country** — INIU vs mapped competitors, per-retailer price history + trend; INIU's own price is the first row; hidden pairs filtered out | iniu_products, competitive_links→products, hidden_competitive_links, price_snapshots, iniu_price_snapshots |
 | `/channel` | Retailer listings grouped by product; brand/country/retailer/status/magsafe/capacity filters; drill-in price chart | listings, products, price_snapshots |
-| `/iniu` | INIU catalogue; click → competitive comparison (General/Price tabs) + INIU own channel price | iniu_products, competitive_links, price_snapshots, iniu_price_snapshots |
+| `/iniu` | INIU catalogue; click → competitive comparison (General/Price tabs) + INIU own channel price; per-row **Hide/Unhide** curates competitors (writes `hidden_competitive_links`, "Show hidden" toggle) | iniu_products, competitive_links, hidden_competitive_links, price_snapshots, iniu_price_snapshots |
 | `/library` | Competitor SKU library (canonical specs) | products |
 | `/reviews` | Pending mapping reviews; **Resolve writes back** | mapping_reviews, listings |
 | `/first-pass` | Per-channel presence registry | first_pass_observations |
@@ -65,6 +65,14 @@ Every field has ONE home table. Every view JOINs to the home; editing writes the
 | Competitor price history | **`price_snapshots`** | not hand-edited (from scrapes) |
 | INIU own price history | **`iniu_price_snapshots`** | ingested from INIU channel scrape |
 | INIU ↔ competitor links | **`competitive_links`** | INIU review step |
+| "Not a real competitor" hide flags | **`hidden_competitive_links`** | INIU page (Hide / Unhide) |
+
+> Hiding, not deleting: the INIU page's per-row **Hide** button does NOT delete the
+> `competitive_links` row (that gets rebuilt from the INIU spec by `upload_iniu.py` every run, so a
+> delete would come back). It inserts into **`hidden_competitive_links`**; all three read paths
+> (home, INIU, Roadmap) filter these pairs out. A "Show hidden (N)" toggle un-hides. This is the
+> durable analog of the old local dashboard, whose only *persistent* competitor removal edited the
+> INIU spec xlsx directly (its cosmetic "exclude" toggle stored nothing). See MEMORY.md → hide.
 
 > Known duplication to remove: `first_pass_observations` still carries its own spec columns
 > (legacy from heavy scrape). The First Pass page must display specs **JOINed from `products`**
@@ -79,7 +87,9 @@ first_seen/last_seen/is_active, partial-unique on (retailer_id, retailer_product
 `trg_mapping_reviews_dedupe_pending` enforces **at most one PENDING review per listing** — a second
 pending insert for the same listing is silently skipped, so an unreviewed listing can't pile up a
 review row every cycle) ·
-`competitive_links` (iniu↔competitor) · `iniu_price_snapshots` (INIU own per retailer×date) ·
+`competitive_links` (iniu↔competitor) · `hidden_competitive_links` (human hide-list masking
+competitive_links pairs at read time; see Field-ownership note) ·
+`iniu_price_snapshots` (INIU own per retailer×date) ·
 `raw_scrape_rows` (Model B staging) · `brand_retailer_targets` (**which retailer×brand to scrape** —
 add/remove a channel by toggling `is_enabled` here; `run_scrape_raw.py` reads it) ·
 `import_runs` / `import_files` / `audit_events` (audit is empty; editing will write it).

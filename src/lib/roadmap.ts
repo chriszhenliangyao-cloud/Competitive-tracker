@@ -57,15 +57,24 @@ type ProdRow = {
 
 export async function getRoadmapData(): Promise<RoadmapData> {
   const sb = getSupabase();
-  const [iniuRes, priceRes, linkRes, prodRes] = await Promise.all([
+  const [iniuRes, priceRes, linkRes, hiddenRes, prodRes] = await Promise.all([
     sb.from("iniu_products").select("id,sku,name,capacity,image_url"),
     sb.from("iniu_price_snapshots").select("iniu_product_id,price,currency"),
     sb.from("competitive_links").select("iniu_product_id,competitor_product_id").limit(100000),
+    sb.from("hidden_competitive_links").select("iniu_product_id,competitor_product_id").limit(100000),
     sb.from("products").select("id,name,rrp,rrp_currency,capacity,image_url,brand:brands(key)"),
   ]);
   const iniu = (iniuRes.data ?? []) as unknown as IniuRow[];
   const prices = (priceRes.data ?? []) as unknown as PriceRow[];
-  const links = (linkRes.data ?? []) as unknown as LinkRow[];
+  // Drop hidden pairs so hidden competitors never appear on the Roadmap.
+  const hiddenSet = new Set<string>(
+    ((hiddenRes.data ?? []) as unknown as { iniu_product_id: number; competitor_product_id: number }[]).map(
+      (h) => `${h.iniu_product_id}|${h.competitor_product_id}`,
+    ),
+  );
+  const links = ((linkRes.data ?? []) as unknown as LinkRow[]).filter(
+    (l) => !hiddenSet.has(`${l.iniu_product_id}|${l.competitor_product_id}`),
+  );
   const prods = (prodRes.data ?? []) as unknown as ProdRow[];
 
   // INIU product -> avg EUR own-channel price

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
 import Sparkline from "@/components/Sparkline";
 import { COUNTRY_NAMES, fmtEUR, fmtMoney, titleCase } from "@/lib/format";
+import { hideCompetitor, unhideCompetitor } from "./actions";
 
 export type PriceRow = {
   retailer: string;
@@ -43,6 +44,7 @@ export type Competitor = {
   rrp_currency: string | null;
   priceRows: PriceRow[];
   dates: string[];
+  hidden: boolean;
 };
 
 export default function IniuTable({
@@ -57,8 +59,10 @@ export default function IniuTable({
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
 
+  // Counts reflect visible (non-hidden) competitors — hidden pairs are masked everywhere.
+  const visibleCount = (id: number) => (compByIniu[id] ?? []).filter((c) => !c.hidden).length;
   const totalLinks = useMemo(
-    () => Object.values(compByIniu).reduce((n, arr) => n + arr.length, 0),
+    () => Object.values(compByIniu).reduce((n, arr) => n + arr.filter((c) => !c.hidden).length, 0),
     [compByIniu],
   );
 
@@ -73,7 +77,7 @@ export default function IniuTable({
   }, [products, q]);
 
   const magsafeCount = products.filter((p) => p.magsafe).length;
-  const mappedCount = products.filter((p) => (compByIniu[p.id]?.length ?? 0) > 0).length;
+  const mappedCount = products.filter((p) => visibleCount(p.id) > 0).length;
 
   const selectedProduct = selected != null ? products.find((p) => p.id === selected) ?? null : null;
   if (selectedProduct) {
@@ -148,9 +152,11 @@ export default function IniuTable({
             </thead>
             <tbody>
               {filtered.map((p) => {
-                const n = compByIniu[p.id]?.length ?? 0;
+                const total = compByIniu[p.id]?.length ?? 0;
+                const n = visibleCount(p.id);
+                const hiddenN = total - n;
                 return (
-                  <tr key={p.id} className={n > 0 ? "clickable" : ""} onClick={() => n > 0 && setSelected(p.id)}>
+                  <tr key={p.id} className={total > 0 ? "clickable" : ""} onClick={() => total > 0 && setSelected(p.id)}>
                     <td>
                       <Thumb src={p.image_url} alt={p.name} />
                     </td>
@@ -174,6 +180,11 @@ export default function IniuTable({
                     <td>{p.magsafe ? <span className="badge badge-magsafe">MagSafe</span> : "—"}</td>
                     <td>
                       {n > 0 ? <span className="badge badge-mapped">{n}</span> : <span className="muted">—</span>}
+                      {hiddenN > 0 ? (
+                        <span className="muted" style={{ marginLeft: 6, fontSize: 11 }} title={`${hiddenN} hidden`}>
+                          ({hiddenN} hidden)
+                        </span>
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -201,12 +212,37 @@ function Compare({
   const [brand, setBrand] = useState("");
   const [retailer, setRetailer] = useState("");
   const [country, setCountry] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
+  const [override, setOverride] = useState<Map<number, boolean>>(new Map());
+  const [busy, setBusy] = useState<number | null>(null);
+  const [, start] = useTransition();
+
+  // Effective hidden state = optimistic local override, else the server value.
+  const isHidden = (c: Competitor) => (override.has(c.id) ? override.get(c.id)! : c.hidden);
+
+  // Curation: hide (not delete) a competitor that shouldn't be mapped here, or bring it back.
+  const setHidden = (c: Competitor, val: boolean) => {
+    setBusy(c.id);
+    start(async () => {
+      const res = val ? await hideCompetitor(product.id, c.id) : await unhideCompetitor(product.id, c.id);
+      setBusy(null);
+      if (res.ok) setOverride((prev) => new Map(prev).set(c.id, val));
+      else window.alert(res.error || "Action failed");
+    });
+  };
+
+  const hiddenCount = useMemo(() => competitors.filter((c) => isHidden(c)).length, [competitors, override]);
+  // What the tables render: visible always; hidden only when "Show hidden" is on.
+  const live = useMemo(
+    () => competitors.filter((c) => showHidden || !isHidden(c)),
+    [competitors, showHidden, override],
+  );
 
   const opts = useMemo(() => {
     const brands = new Set<string>();
     const retailers = new Set<string>();
     const countries = new Set<string>();
-    for (const c of competitors) {
+    for (const c of live) {
       brands.add(c.brand);
       for (const r of c.priceRows) {
         retailers.add(r.retailer);
@@ -218,16 +254,16 @@ function Compare({
       retailers: [...retailers].sort(),
       countries: [...countries].sort(),
     };
-  }, [competitors]);
+  }, [live]);
 
   const shown = useMemo(() => {
-    return competitors.filter((c) => {
+    return live.filter((c) => {
       if (brand && c.brand !== brand) return false;
       if (retailer && !c.priceRows.some((r) => r.retailer === retailer)) return false;
       if (country && !c.priceRows.some((r) => r.country === country)) return false;
       return true;
     });
-  }, [competitors, brand, retailer, country]);
+  }, [live, brand, retailer, country]);
 
   return (
     <>
@@ -248,13 +284,22 @@ function Compare({
       </header>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button className={`btn${tab === "general" ? " btn-primary" : ""}`} onClick={() => setTab("general")}>
             General Info
           </button>
           <button className={`btn${tab === "price" ? " btn-primary" : ""}`} onClick={() => setTab("price")}>
             Price
           </button>
+          {hiddenCount > 0 ? (
+            <button
+              className={`btn${showHidden ? " btn-primary" : ""}`}
+              onClick={() => setShowHidden((v) => !v)}
+              title="Show/hide the competitors you've hidden"
+            >
+              {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
+            </button>
+          ) : null}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <Sel label="Brand" value={brand} set={setBrand} opts={opts.brands} render={titleCase} />
@@ -279,18 +324,32 @@ function Compare({
         <div className="table-head">
           <h2>{tab === "general" ? "Competitive specs" : "Competitive pricing"}</h2>
           <span className="count">
-            {shown.length} of {competitors.length}
+            {shown.length} of {live.length}
           </span>
         </div>
         <div className="table-wrap">
-          {tab === "general" ? <GeneralTable competitors={shown} /> : <PriceTable competitors={shown} retailer={retailer} country={country} />}
+          {tab === "general" ? (
+            <GeneralTable competitors={shown} isHidden={isHidden} onToggleHide={setHidden} busy={busy} />
+          ) : (
+            <PriceTable competitors={shown} retailer={retailer} country={country} isHidden={isHidden} onToggleHide={setHidden} busy={busy} />
+          )}
         </div>
       </section>
     </>
   );
 }
 
-function GeneralTable({ competitors }: { competitors: Competitor[] }) {
+function GeneralTable({
+  competitors,
+  isHidden,
+  onToggleHide,
+  busy,
+}: {
+  competitors: Competitor[];
+  isHidden: (c: Competitor) => boolean;
+  onToggleHide: (c: Competitor, val: boolean) => void;
+  busy: number | null;
+}) {
   return (
     <table>
       <thead>
@@ -306,31 +365,55 @@ function GeneralTable({ competitors }: { competitors: Competitor[] }) {
           <th>Ports</th>
           <th>MagSafe</th>
           <th>RRP</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
-        {competitors.map((c) => (
-          <tr key={c.id}>
-            <td>
-              <Thumb src={c.image_url} alt={c.name} />
-            </td>
-            <td>{titleCase(c.brand)}</td>
-            <td>
-              {c.name}
-              <div className="sub">{c.sku}</div>
-            </td>
-            <td>{c.capacity ?? "—"}</td>
-            <td>{c.wired_power ?? "—"}</td>
-            <td>{c.wireless_power ?? "—"}</td>
-            <td>{c.size ?? "—"}</td>
-            <td>{c.weight ?? "—"}</td>
-            <td>{c.usb_ports ?? "—"}</td>
-            <td>{c.magsafe ? <span className="badge badge-magsafe">Yes</span> : "—"}</td>
-            <td>{c.rrp != null ? fmtMoney(c.rrp, c.rrp_currency) : "—"}</td>
-          </tr>
-        ))}
+        {competitors.map((c) => {
+          const hidden = isHidden(c);
+          return (
+            <tr key={c.id} className={hidden ? "row-hidden" : ""}>
+              <td>
+                <Thumb src={c.image_url} alt={c.name} />
+              </td>
+              <td>{titleCase(c.brand)}</td>
+              <td>
+                {c.name}
+                <div className="sub">{c.sku}</div>
+              </td>
+              <td>{c.capacity ?? "—"}</td>
+              <td>{c.wired_power ?? "—"}</td>
+              <td>{c.wireless_power ?? "—"}</td>
+              <td>{c.size ?? "—"}</td>
+              <td>{c.weight ?? "—"}</td>
+              <td>{c.usb_ports ?? "—"}</td>
+              <td>{c.magsafe ? <span className="badge badge-magsafe">Yes</span> : "—"}</td>
+              <td>{c.rrp != null ? fmtMoney(c.rrp, c.rrp_currency) : "—"}</td>
+              <td>
+                <HideBtn hidden={hidden} onClick={() => onToggleHide(c, !hidden)} busy={busy === c.id} />
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
+  );
+}
+
+// Hide = mask this competitor (kept in DB, reversible). Unhide brings it back.
+function HideBtn({ hidden, onClick, busy }: { hidden: boolean; onClick: () => void; busy: boolean }) {
+  return (
+    <button
+      className={`unlink-btn${hidden ? " is-hidden" : ""}`}
+      title={hidden ? "Bring this competitor back" : "Not a competitor — hide it"}
+      disabled={busy}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {busy ? "…" : hidden ? "Unhide" : "Hide"}
+    </button>
   );
 }
 
@@ -338,10 +421,16 @@ function PriceTable({
   competitors,
   retailer,
   country,
+  isHidden,
+  onToggleHide,
+  busy,
 }: {
   competitors: Competitor[];
   retailer: string;
   country: string;
+  isHidden: (c: Competitor) => boolean;
+  onToggleHide: (c: Competitor, val: boolean) => void;
+  busy: number | null;
 }) {
   return (
     <table>
@@ -354,17 +443,19 @@ function PriceTable({
           <th>Retailer</th>
           <th>Price history (EUR)</th>
           <th>Trend</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         {competitors.map((c) => {
+          const hidden = isHidden(c);
           const dates = c.dates.slice(-4);
           const rows = c.priceRows.filter(
             (r) => (!retailer || r.retailer === retailer) && (!country || r.country === country),
           );
           if (rows.length === 0) {
             return (
-              <tr key={c.id}>
+              <tr key={c.id} className={hidden ? "row-hidden" : ""}>
                 <td>
                   <Thumb src={c.image_url} alt={c.name} />
                 </td>
@@ -377,11 +468,14 @@ function PriceTable({
                 <td className="muted" colSpan={3}>
                   no channel listing
                 </td>
+                <td>
+                  <HideBtn hidden={hidden} onClick={() => onToggleHide(c, !hidden)} busy={busy === c.id} />
+                </td>
               </tr>
             );
           }
           return rows.map((r, i) => (
-            <tr key={`${c.id}-${r.retailer}-${i}`}>
+            <tr key={`${c.id}-${r.retailer}-${i}`} className={hidden ? "row-hidden" : ""}>
               {i === 0 ? (
                 <>
                   <td rowSpan={rows.length}>
@@ -418,6 +512,11 @@ function PriceTable({
               <td>
                 <Sparkline values={dates.map((d) => r.byDate[d] ?? null)} />
               </td>
+              {i === 0 ? (
+                <td rowSpan={rows.length}>
+                  <HideBtn hidden={hidden} onClick={() => onToggleHide(c, !hidden)} busy={busy === c.id} />
+                </td>
+              ) : null}
             </tr>
           ));
         })}

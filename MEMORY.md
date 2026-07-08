@@ -5,7 +5,7 @@ Evolving log for the cloud app. Stable architecture is in `AGENTS.md`; this file
 
 ## Current state (cloud is live)
 - Site deployed on Vercel, reads Supabase live. Pages: `/` (Prices by Country), `/channel`,
-  `/iniu`, `/library`, `/reviews`, `/first-pass`.
+  `/iniu`, `/library`, `/reviews`, `/first-pass`, `/roadmap`.
 - Data in Supabase (as of 2026-07): 936 listings, ~3.25k price_snapshots across 7 weekly dates,
   548 competitor products, 24 iniu_products, ~664 first_pass registry rows, 972 competitive_links,
   51 iniu_price_snapshots (INIU own price, 1 date 2026-06-22 so far). `raw_scrape_rows` holds ~9
@@ -139,6 +139,27 @@ reads first_pass, so a resolved listing maps automatically forever and never ret
 - Considered but REJECTED as over-design: a separate `sku_overrides` tier-0 table, and a `manual`
   lock column — unnecessary because a calibrated listing is `mapped` (not new_listing), so it never
   re-enters review and can't be clobbered.
+
+## Competitor hide — durable, reversible, re-import-safe (2026-07-08)
+Curating competitors on `/iniu` must **hide, not delete**. A hard delete of the `competitive_links`
+row is not durable: `upload_iniu.py --write` (re-run after every push that adds new products) rebuilds
+links from the INIU spec xlsx and would re-insert any pair still listed there → the removal silently
+comes back. Same class of bug as the review-permanence one.
+- Where the OLD local dashboard stored hides (investigated): its only **persistent** competitor
+  removal was `/api/remove-mapping` (server.py), which edits `INIU/INIU_PowerBank_Spec_Sheet.xlsx`
+  directly (drops the SKU from that INIU row's Competitive SKU cols). The cloud's 972 links were built
+  from that already-edited sheet, so past removals are already reflected. The dashboard's cosmetic
+  "exclude" ×-toggle (`excludedCompetitiveSkus`) stored **nothing** — in-memory only, lost on refresh.
+- Cloud solution (chosen over a soft-delete column): new table **`hidden_competitive_links`**
+  (iniu_product_id, competitor_product_id, hidden_by, reason, hidden_at; unique(iniu,comp); FK CASCADE;
+  RLS on, service-role only). Decoupled from `competitive_links` on purpose — survives even a full
+  link rebuild, and "show me what I hid" is one query. `competitive_links` stays complete; all three
+  read paths (`page.tsx`, `iniu/page.tsx`, `lib/roadmap.ts`) mask hidden pairs at read time, so a
+  hidden competitor never appears on any board and `upload_iniu.py` needs **no change** (it re-inserts
+  the link, the reader hides it). Loop closed.
+- UI: `/iniu` per-row **Hide** (optimistic, reversible, no confirm) + **Show hidden (N)** toggle that
+  greys hidden rows with **Unhide**. Catalogue shows visible count + `(N hidden)`. `hidden_by` = the
+  signed-in email (audit trail the old dashboard lacked).
 
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only

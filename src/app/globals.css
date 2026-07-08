@@ -353,6 +353,43 @@ input:focus {
   background: var(--accent-bg);
   color: var(--accent);
 }
+.unlink-btn {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.unlink-btn:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: #fff;
+}
+.unlink-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.unlink-btn.is-hidden {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.unlink-btn.is-hidden:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+tr.row-hidden td {
+  background: var(--subtle);
+  color: var(--muted);
+}
+tr.row-hidden td .sub {
+  color: var(--muted);
+}
 
 /* ---------- Badges / status ---------- */
 .badge {

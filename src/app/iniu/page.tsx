@@ -27,7 +27,7 @@ type LinkRow = {
 
 export default async function IniuPage() {
   const sb = getSupabase();
-  const [iniuRes, linkRes, channel, priceRes] = await Promise.all([
+  const [iniuRes, linkRes, hiddenRes, channel, priceRes] = await Promise.all([
     sb
       .from("iniu_products")
       .select("id, sku, name, capacity, size, weight, wired_power, wireless_power, usb_ports, magsafe, image_url")
@@ -39,12 +39,20 @@ export default async function IniuPage() {
          competitor:products(id, sku, name, capacity, wired_power, wireless_power, size, weight, usb_ports, magsafe, image_url, rrp, rrp_currency, brand:brands(display_name))`,
       )
       .limit(20000),
+    sb.from("hidden_competitive_links").select("iniu_product_id, competitor_product_id").limit(100000),
     getChannelRows(),
     sb
       .from("iniu_price_snapshots")
       .select("iniu_product_id, scraped_date, price, promo_price, currency, country, retailer_product_code, retailer:retailers(display_name)")
       .order("scraped_date"),
   ]);
+
+  // Pairs the user chose to hide (kept in competitive_links, masked here).
+  const hiddenSet = new Set<string>(
+    ((hiddenRes.data ?? []) as unknown as { iniu_product_id: number; competitor_product_id: number }[]).map(
+      (h) => `${h.iniu_product_id}|${h.competitor_product_id}`,
+    ),
+  );
 
   // INIU's own per-retailer price history (EUR), one row per (product, retailer)
   const ownByIniu: Record<number, PriceRow[]> = {};
@@ -120,6 +128,7 @@ export default async function IniuPage() {
       rrp_currency: c.rrp_currency,
       priceRows: chRows.get(k) ?? [],
       dates: [...(chDates.get(k) ?? [])].sort(),
+      hidden: hiddenSet.has(`${link.iniu_product_id}|${c.id}`),
     });
   }
 
