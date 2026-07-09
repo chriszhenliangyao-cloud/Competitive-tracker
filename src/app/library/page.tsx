@@ -8,7 +8,7 @@ export default async function LibraryPage() {
   const { data } = await sb
     .from("products")
     .select(
-      "id, sku, name, ean, capacity, wired_power, wireless_power, usb_ports, magsafe, size, weight, rrp, rrp_currency, image_url, source_type, brand:brands(display_name, key)",
+      "id, sku, name, ean, capacity, wired_power, wireless_power, usb_ports, magsafe, size, weight, rrp, rrp_currency, image_url, source_type, updated_at, brand:brands(display_name, key)",
     )
     .order("name")
     .limit(5000);

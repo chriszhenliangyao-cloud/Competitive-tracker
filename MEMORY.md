@@ -233,6 +233,24 @@ SEPARATE charger pipeline, not ours. Cloud only had the thin Ugreen rule.
   for that row (it's gone); the general guardrail (don't run Model-A library push once editing in the
   cloud) still stands. DB-only migration (`fp_norm_sku_all_brand_prefixes_v2`); no web code change.
 
+## Library spec editing — built (single source of truth is now writable) (2026-07-08)
+The last piece of the loop: Library (`products`) is the ONE home for competitor specs, and it's now
+editable in the cloud. `/library` row → **Edit** → modal form → `updateProduct(id, patch, updated_at)`
+server action (`src/app/library/actions.ts`). Guardrails:
+- **Whitelist**: only spec fields (name, ean, capacity, wired_power, wireless_power, usb_ports, size,
+  weight, rrp, rrp_currency, magsafe). NEVER sku/sku_key/brand (identity — would break the mapping
+  key) or image_url (owned by the upload_images pipeline).
+- **Optimistic lock**: reads current `updated_at`, rejects if it changed since the client opened the
+  row (`conflict` → "reload and re-apply"), and writes with `.eq("updated_at", …)` so a concurrent
+  edit can't be silently clobbered. Trigger `products_touch_updated_at` bumps it on every write.
+- **Audit**: every edit writes before/after + actor email to `audit_events` (was empty; now used).
+- **Propagation**: `revalidatePath` on /library, /, /iniu, /channel, /first-pass — one edit shows
+  everywhere (First Pass reads canonical specs from products; see the First-Pass note above).
+- First Pass stays READ-ONLY for specs by design (they're a projection of products — edit at the
+  source). INIU own specs (`iniu_products`) editing is still a separate, unbuilt surface if needed.
+- **PRECONDITION now active**: since specs live in the cloud, do NOT run Model-A `push_to_supabase`
+  (library scope) — it overwrites `products` from local xlsx and would revert cloud edits.
+
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
   351 distinct listings — Model A `push_to_supabase` used a date-stamped `source_file` in the dedupe

@@ -39,8 +39,11 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
 - Data volumes are small (hundreds–few thousand rows) → server fetches everything and ships it
   to a client component that does filtering/search/sort in-browser.
 - Prices normalized to **EUR** for comparison via static FX (`src/lib/format.ts`); RRP shown native.
-- Writes (Reviews "Resolve", INIU Hide/Unhide) go through **server actions** using the service-role
-  client.
+- Writes (Reviews "Resolve", INIU Hide/Unhide, **Library spec edit**) go through **server actions**
+  using the service-role client. Library edit (`src/app/library/actions.ts::updateProduct`) writes
+  `products` with an **`updated_at` optimistic lock** (a stale edit is rejected, not clobbered) and
+  logs before/after to **`audit_events`**; it only touches spec fields (never sku/sku_key/brand
+  identity or image_url). Editable fields propagate to every JOINing view via `revalidatePath`.
 - **Auth + RBAC** (Google login, `src/lib/access.ts` is the single source of truth):
   - `USERS` maps each of the 7 allowed emails → `{role, countries}`. `ALLOWED_EMAILS` is derived
     from its keys. `role: "admin"` → `countries: null` (sees all); `role: "sales"` → country-scoped
@@ -61,7 +64,7 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
 | `/` | **Prices by Country** — INIU vs mapped competitors, per-retailer price history + trend; INIU's own price is the first row; hidden pairs filtered out | iniu_products, competitive_links→products, hidden_competitive_links, price_snapshots, iniu_price_snapshots |
 | `/channel` | Retailer listings grouped by product; brand/country/retailer/status/magsafe/capacity filters; drill-in price chart | listings, products, price_snapshots |
 | `/iniu` | INIU catalogue; click → competitive comparison (General/Price tabs) + INIU own channel price; per-row **Hide/Unhide** curates competitors (writes `hidden_competitive_links`, "Show hidden" toggle) | iniu_products, competitive_links, hidden_competitive_links, price_snapshots, iniu_price_snapshots |
-| `/library` | Competitor SKU library (canonical specs) | products |
+| `/library` | Competitor SKU library (canonical specs) — **editable**: Edit → modal → `updateProduct` (optimistic lock + audit); the single source of truth for specs | products, audit_events |
 | `/reviews` | Pending mapping reviews; **Resolve writes back** | mapping_reviews, listings |
 | `/first-pass` | Per-channel registry keyed by retailer product code; specs resolved from the mapped `products` (canonical, "Library" badge) with raw scrape fallback ("raw" badge) | first_pass_observations, listings, products |
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
 import { fmtMoney, titleCase } from "@/lib/format";
+import { updateProduct, type ProductPatch } from "./actions";
 
 export type LibProduct = {
   id: number;
@@ -20,33 +21,28 @@ export type LibProduct = {
   rrp_currency: string | null;
   image_url: string | null;
   source_type: string | null;
+  updated_at: string;
   brand: { display_name: string; key: string } | null;
 };
 
-const KEY_FIELDS: (keyof LibProduct)[] = [
-  "capacity",
-  "wired_power",
-  "wireless_power",
-  "usb_ports",
-  "size",
-  "weight",
-];
+const KEY_FIELDS: (keyof LibProduct)[] = ["capacity", "wired_power", "wireless_power", "usb_ports", "size", "weight"];
+const CURRENCIES = ["EUR", "PLN", "GBP", "USD"];
 
 const filled = (p: LibProduct) => KEY_FIELDS.filter((f) => p[f] != null && String(p[f]).trim() !== "").length;
 
 export default function LibraryTable({ products }: { products: LibProduct[] }) {
+  const [rows, setRows] = useState(products);
+  useEffect(() => setRows(products), [products]); // pick up server revalidations
   const [brand, setBrand] = useState("");
   const [comp, setComp] = useState("");
   const [q, setQ] = useState("");
+  const [editing, setEditing] = useState<LibProduct | null>(null);
 
-  const brands = useMemo(
-    () => [...new Set(products.map((p) => p.brand?.display_name ?? "—"))].sort(),
-    [products],
-  );
+  const brands = useMemo(() => [...new Set(rows.map((p) => p.brand?.display_name ?? "—"))].sort(), [rows]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    return products.filter((p) => {
+    return rows.filter((p) => {
       if (brand && (p.brand?.display_name ?? "—") !== brand) return false;
       const f = filled(p);
       if (comp === "complete" && f < KEY_FIELDS.length) return false;
@@ -54,7 +50,7 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
       if (qq && !`${p.sku} ${p.name}`.toLowerCase().includes(qq)) return false;
       return true;
     });
-  }, [products, brand, comp, q]);
+  }, [rows, brand, comp, q]);
 
   const summary = useMemo(() => {
     const base = filtered.length || 1;
@@ -66,27 +62,28 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
 
   const incomplete = filtered.filter((p) => filled(p) < KEY_FIELDS.length).length;
   const label: Record<string, string> = {
-    capacity: "Capacity",
-    wired_power: "Wired",
-    wireless_power: "Wireless",
-    usb_ports: "Ports",
-    size: "Size",
-    weight: "Weight",
+    capacity: "Capacity", wired_power: "Wired", wireless_power: "Wireless",
+    usb_ports: "Ports", size: "Size", weight: "Weight",
   };
   const barColor = (pct: number) => (pct >= 80 ? "var(--good)" : pct >= 50 ? "var(--warn)" : "var(--danger)");
+
+  const onSaved = (saved: Record<string, unknown>) => {
+    setRows((prev) => prev.map((r) => (r.id === saved.id ? ({ ...r, ...saved } as LibProduct) : r)));
+    setEditing(null);
+  };
 
   return (
     <>
       <header className="page-head">
         <div>
           <h1>Library</h1>
-          <p>Canonical competitor SKUs and their specs.</p>
+          <p>Canonical competitor SKUs and their specs. <strong>The single source of truth</strong> — an edit here propagates to Channel, INIU, Dashboard and First Pass.</p>
         </div>
-        <div className="pill">{products.length} SKUs</div>
+        <div className="pill">{rows.length} SKUs</div>
       </header>
 
       <section className="metrics">
-        <Metric label="Products" value={products.length} />
+        <Metric label="Products" value={rows.length} />
         <Metric label="Showing" value={filtered.length} />
         <Metric label="Incomplete" value={incomplete} />
         <Metric label="Brands" value={brands.length} />
@@ -114,11 +111,7 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
           <label>Brand</label>
           <select value={brand} onChange={(e) => setBrand(e.target.value)}>
             <option value="">All</option>
-            {brands.map((b) => (
-              <option key={b} value={b}>
-                {titleCase(b)}
-              </option>
-            ))}
+            {brands.map((b) => <option key={b} value={b}>{titleCase(b)}</option>)}
           </select>
         </div>
         <div className="filter-group">
@@ -138,9 +131,7 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
       <section className="table-panel">
         <div className="table-head">
           <h2>Products</h2>
-          <span className="count">
-            {filtered.length} of {products.length}
-          </span>
+          <span className="count">{filtered.length} of {rows.length}</span>
         </div>
         <div className="table-wrap">
           <table>
@@ -168,9 +159,7 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
                 const dot = f === KEY_FIELDS.length ? "dot-green" : f >= 3 ? "dot-amber" : "dot-gray";
                 return (
                   <tr key={p.id}>
-                    <td>
-                      <Thumb src={p.image_url} alt={p.name} />
-                    </td>
+                    <td><Thumb src={p.image_url} alt={p.name} /></td>
                     <td className="muted">{p.sku}</td>
                     <td>{p.name}</td>
                     <td>{titleCase(p.brand?.display_name)}</td>
@@ -183,8 +172,9 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
                     <td>{p.size ?? "—"}</td>
                     <td>{p.weight ?? "—"}</td>
                     <td>{p.rrp != null ? fmtMoney(Number(p.rrp), p.rrp_currency) : "—"}</td>
-                    <td>
+                    <td style={{ whiteSpace: "nowrap" }}>
                       <span className={`dot ${dot}`} title={`${f}/${KEY_FIELDS.length} fields`} />
+                      <button className="unlink-btn" style={{ marginLeft: 8 }} onClick={() => setEditing(p)}>Edit</button>
                     </td>
                   </tr>
                 );
@@ -193,7 +183,113 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
           </table>
         </div>
       </section>
+
+      {editing ? <EditModal product={editing} onClose={() => setEditing(null)} onSaved={onSaved} /> : null}
     </>
+  );
+}
+
+function EditModal({
+  product,
+  onClose,
+  onSaved,
+}: {
+  product: LibProduct;
+  onClose: () => void;
+  onSaved: (saved: Record<string, unknown>) => void;
+}) {
+  const [form, setForm] = useState({
+    name: product.name ?? "",
+    ean: product.ean ?? "",
+    capacity: product.capacity ?? "",
+    wired_power: product.wired_power ?? "",
+    wireless_power: product.wireless_power ?? "",
+    usb_ports: product.usb_ports ?? "",
+    size: product.size ?? "",
+    weight: product.weight ?? "",
+    rrp: product.rrp != null ? String(product.rrp) : "",
+    rrp_currency: product.rrp_currency ?? "EUR",
+    magsafe: !!product.magsafe,
+  });
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, start] = useTransition();
+  const set = (k: keyof typeof form, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+
+  const save = () => {
+    setErr(null);
+    const patch: ProductPatch = {
+      name: form.name,
+      ean: form.ean,
+      capacity: form.capacity,
+      wired_power: form.wired_power,
+      wireless_power: form.wireless_power,
+      usb_ports: form.usb_ports,
+      size: form.size,
+      weight: form.weight,
+      rrp: form.rrp.trim() === "" ? null : Number(form.rrp),
+      rrp_currency: form.rrp_currency || null,
+      magsafe: form.magsafe,
+    };
+    if (patch.rrp != null && Number.isNaN(patch.rrp)) {
+      setErr("RRP must be a number.");
+      return;
+    }
+    start(async () => {
+      const res = await updateProduct(product.id, patch, product.updated_at);
+      if (res.ok && res.product) onSaved(res.product);
+      else setErr(res.error || "Save failed");
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <h2>Edit spec</h2>
+            <span className="modal-sub"><code>{product.sku}</code> · {titleCase(product.brand?.display_name)} · id {product.id}</span>
+          </div>
+          <button className="unlink-btn" onClick={onClose}>Close</button>
+        </div>
+
+        <div className="form-grid">
+          <Field label="Product name" wide><input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
+          <Field label="EAN"><input value={form.ean} onChange={(e) => set("ean", e.target.value)} /></Field>
+          <Field label="Capacity"><input value={form.capacity} onChange={(e) => set("capacity", e.target.value)} placeholder="20000 mAh" /></Field>
+          <Field label="Wired power"><input value={form.wired_power} onChange={(e) => set("wired_power", e.target.value)} placeholder="65W" /></Field>
+          <Field label="Wireless power"><input value={form.wireless_power} onChange={(e) => set("wireless_power", e.target.value)} placeholder="15W" /></Field>
+          <Field label="USB ports"><input value={form.usb_ports} onChange={(e) => set("usb_ports", e.target.value)} placeholder="USB-A*1+USB-C*1" /></Field>
+          <Field label="Size"><input value={form.size} onChange={(e) => set("size", e.target.value)} /></Field>
+          <Field label="Weight"><input value={form.weight} onChange={(e) => set("weight", e.target.value)} /></Field>
+          <Field label="RRP"><input value={form.rrp} onChange={(e) => set("rrp", e.target.value)} inputMode="decimal" placeholder="19.99" /></Field>
+          <Field label="Currency">
+            <select value={form.rrp_currency} onChange={(e) => set("rrp_currency", e.target.value)}>
+              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="MagSafe">
+            <label className="chk"><input type="checkbox" checked={form.magsafe} onChange={(e) => set("magsafe", e.target.checked)} /> MagSafe / magnetic</label>
+          </Field>
+        </div>
+
+        <div className="modal-note">SKU and brand are the product identity and can&apos;t be changed here. Image is managed by the upload pipeline.</div>
+        {err ? <div className="modal-err">{err}</div> : null}
+
+        <div className="modal-actions">
+          <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={"form-field" + (wide ? " wide" : "")}>
+      <label>{label}</label>
+      {children}
+    </div>
   );
 }
 

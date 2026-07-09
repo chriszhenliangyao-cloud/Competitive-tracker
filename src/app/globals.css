@@ -397,6 +397,36 @@ tr.row-hidden td .sub {
 .fp-src.lib { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
 .fp-src.raw { background: var(--subtle); color: var(--warn); border: 1px solid var(--border-mid); }
 
+/* ---------- Edit modal / form ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(19, 32, 30, 0.42);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 48px 16px; z-index: 100; overflow-y: auto;
+}
+.modal-card {
+  width: 100%; max-width: 720px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 40px rgba(19,32,30,0.18);
+  padding: 20px 22px;
+}
+.modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.modal-head h2 { font-size: 17px; font-weight: 750; margin: 0; }
+.modal-sub { font-size: 12px; color: var(--muted); }
+.modal-sub code { font-family: ui-monospace, Menlo, monospace; background: var(--subtle); padding: 0 4px; border-radius: 4px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.form-field { display: flex; flex-direction: column; gap: 4px; }
+.form-field.wide { grid-column: 1 / -1; }
+.form-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+.form-field input, .form-field select {
+  font: inherit; font-size: 13px; color: var(--foreground); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; width: 100%;
+}
+.form-field input:focus, .form-field select:focus { outline: none; border-color: var(--accent); }
+.form-field .chk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--foreground); padding: 7px 0; }
+.modal-note { font-size: 11.5px; color: var(--muted); margin: 14px 0 0; }
+.modal-err { font-size: 13px; color: var(--danger); background: #fdecea; border: 1px solid #f2c2bd; border-radius: 8px; padding: 8px 10px; margin-top: 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+@media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+
 /* ---------- Badges / status ---------- */
 .badge {
   display: inline-block;
