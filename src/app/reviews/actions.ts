@@ -1,6 +1,7 @@
 "use server";
 
 import { getSupabase } from "@/lib/supabase";
+import { requireAdmin } from "@/lib/scope";
 import { revalidatePath } from "next/cache";
 
 // Resolving a review APPLIES the decision — same logic as the Excel-era
@@ -9,7 +10,7 @@ import { revalidatePath } from "next/cache";
 // registry (retailer_product_code -> sku), flips the listing to mapped, and
 // closes the queue, atomically. Because the mapping cascade reads first_pass, the
 // listing maps automatically every future cycle and never returns to review.
-// NOTE: auth gating is deferred — protect this deployment via Vercel access control for now.
+// Admin-only: the /reviews page is admin-gated and the action re-checks the role.
 
 export async function resolveReview(
   id: number,
@@ -17,6 +18,8 @@ export async function resolveReview(
   correctSku: string,
   productName: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, error: denied };
   const sku = (correctSku || "").trim();
   if (!sku) return { ok: false, error: "Correct SKU is required" };
   const sb = getSupabase();
@@ -49,6 +52,8 @@ export async function resolveReview(
 }
 
 export async function reopenReview(id: number): Promise<{ ok: boolean; error?: string }> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, error: denied };
   const sb = getSupabase();
   const { error } = await sb
     .from("mapping_reviews")

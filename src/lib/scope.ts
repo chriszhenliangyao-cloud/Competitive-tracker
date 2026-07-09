@@ -28,3 +28,13 @@ export function allowsCountry(scope: Scope, country: string | null | undefined):
   if (!country) return false; // scoped users don't see country-less rows
   return scope.countries.includes(country);
 }
+
+// Authorization gate for mutating server actions. Middleware already blocks the
+// admin-only PAGES, but server actions dispatch by action-id and could in theory be
+// replayed to an allowed path, so every write re-checks the caller's role here (all
+// current write actions live on admin-only pages). Returns null when authorized, or
+// an error string to return straight to the caller.
+export async function requireAdmin(): Promise<string | null> {
+  const scope = await getScope();
+  return scope.role === "admin" ? null : "Not authorized";
+}

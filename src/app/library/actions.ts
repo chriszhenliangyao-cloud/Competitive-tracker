@@ -2,6 +2,7 @@
 
 import { getSupabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/scope";
 import { revalidatePath } from "next/cache";
 
 // Library is the ONE home for competitor specs (field-ownership contract). Editing
@@ -36,6 +37,8 @@ export async function updateProduct(
   patch: ProductPatch,
   expectedUpdatedAt: string,
 ): Promise<Result> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, error: denied };
   const sb = getSupabase();
 
   // whitelist + normalise empties to null

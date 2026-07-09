@@ -2,6 +2,7 @@
 
 import { getSupabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/scope";
 import { revalidatePath } from "next/cache";
 
 type Result = { ok: boolean; error?: string };
@@ -24,6 +25,8 @@ async function sessionEmail(): Promise<string | null> {
 // the decision durable: a re-import can't resurrect it, and the hidden list is a
 // simple query. Affects the INIU page, the home Prices-by-Country view, and Roadmap.
 export async function hideCompetitor(iniuId: number, competitorId: number): Promise<Result> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, error: denied };
   const sb = getSupabase();
   const email = await sessionEmail();
   const { error } = await sb
@@ -38,6 +41,8 @@ export async function hideCompetitor(iniuId: number, competitorId: number): Prom
 
 // Un-hide: drop the row from hidden_competitive_links so the pair shows again.
 export async function unhideCompetitor(iniuId: number, competitorId: number): Promise<Result> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, error: denied };
   const sb = getSupabase();
   const { error } = await sb
     .from("hidden_competitive_links")
