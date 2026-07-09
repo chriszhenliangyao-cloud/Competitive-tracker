@@ -202,8 +202,14 @@ first_pass rows whose last_seen didn't advance. Strictly exact matching — **no
 - **SKU = product identity; Retailer Product Code = channel identity; EAN = metadata.**
 - **No fuzzy matching** — unresolved rows → `new_listing` for manual review.
 - **First-party only** (marketplace filtered inside the scrapers, not the mapper).
-- Images: permanent images live in **Supabase Storage** (`product-images/<brand>/<sku|ean>.png`);
-  retailer CDN URLs are transient fallbacks (a broken one usually means the product delisted).
+- Images: permanent images live in **Supabase Storage** (`product-images/<brand>/<sku|ean>.png` from
+  the pipeline; `product-images/cloud/<id>-<ts>.<ext>` for dashboard uploads); retailer CDN URLs are
+  transient fallbacks (a broken one usually means the product delisted).
+- **Library image upload**: the Library editor can upload a screenshot/photo per product
+  (`uploadProductImage`) → Storage `cloud/` namespace → sets `products.image_url` + `image_path`.
+  So `image_url` now has a SECOND writer (the dashboard) besides `upload_images.py`. Under Model B
+  that's fine; the guardrail is the same as products specs — do NOT run Model-A `upload_images.py`,
+  it could overwrite cloud-uploaded URLs.
 
 ## Gotchas
 - **Supabase free tier auto-pauses after ~7 days idle.** A paused project loses its DNS →

@@ -246,6 +246,12 @@ server action (`src/app/library/actions.ts`). Guardrails:
 - **Audit**: every edit writes before/after + actor email to `audit_events` (was empty; now used).
 - **Propagation**: `revalidatePath` on /library, /, /iniu, /channel, /first-pass — one edit shows
   everywhere (First Pass reads canonical specs from products; see the First-Pass note above).
+- **Image upload** (2026-07-08): the Library editor also uploads a product image (screenshot/photo)
+  straight to Supabase Storage — `uploadProductImage` → `product-images/cloud/<id>-<ts>.<ext>` (own
+  namespace, never collides with the pipeline's `<brand>/<sku>.png`) → sets `products.image_url` +
+  `image_path` (optimistic-lock + audit like spec edits). Fills the 111 products that had no image
+  (old-system images never synced). `image_url` now has TWO writers (dashboard + `upload_images.py`);
+  same guardrail — don't run Model-A `upload_images.py` or it may overwrite cloud uploads.
 - First Pass stays READ-ONLY for specs by design (they're a projection of products — edit at the
   source). INIU own specs (`iniu_products`) editing is still a separate, unbuilt surface if needed.
 - **PRECONDITION now active**: since specs live in the cloud, do NOT run Model-A `push_to_supabase`

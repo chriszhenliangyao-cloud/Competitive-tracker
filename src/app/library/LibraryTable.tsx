@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
 import { fmtMoney, titleCase } from "@/lib/format";
-import { updateProduct, type ProductPatch } from "./actions";
+import { updateProduct, uploadProductImage, type ProductPatch } from "./actions";
 
 export type LibProduct = {
   id: number;
@@ -67,10 +67,9 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
   };
   const barColor = (pct: number) => (pct >= 80 ? "var(--good)" : pct >= 50 ? "var(--warn)" : "var(--danger)");
 
-  const onSaved = (saved: Record<string, unknown>) => {
+  // merge a partial product (from a save or image upload) into the table row, without closing the modal
+  const applyPatch = (saved: Record<string, unknown>) =>
     setRows((prev) => prev.map((r) => (r.id === saved.id ? ({ ...r, ...saved } as LibProduct) : r)));
-    setEditing(null);
-  };
 
   return (
     <>
@@ -184,7 +183,7 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
         </div>
       </section>
 
-      {editing ? <EditModal product={editing} onClose={() => setEditing(null)} onSaved={onSaved} /> : null}
+      {editing ? <EditModal product={editing} onClose={() => setEditing(null)} onPatch={applyPatch} /> : null}
     </>
   );
 }
@@ -192,11 +191,11 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
 function EditModal({
   product,
   onClose,
-  onSaved,
+  onPatch,
 }: {
   product: LibProduct;
   onClose: () => void;
-  onSaved: (saved: Record<string, unknown>) => void;
+  onPatch: (saved: Record<string, unknown>) => void;
 }) {
   const [form, setForm] = useState({
     name: product.name ?? "",
@@ -211,9 +210,31 @@ function EditModal({
     rrp_currency: product.rrp_currency ?? "EUR",
     magsafe: !!product.magsafe,
   });
+  const [imgUrl, setImgUrl] = useState(product.image_url);
+  const [lockTs, setLockTs] = useState(product.updated_at); // moves forward after any write so Save/upload don't self-conflict
   const [err, setErr] = useState<string | null>(null);
   const [saving, start] = useTransition();
+  const [uploading, startUpload] = useTransition();
   const set = (k: keyof typeof form, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    setErr(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    startUpload(async () => {
+      const res = await uploadProductImage(product.id, lockTs, fd);
+      if (res.ok && res.url && res.updatedAt) {
+        setImgUrl(res.url);
+        setLockTs(res.updatedAt);
+        onPatch({ id: product.id, image_url: res.url, updated_at: res.updatedAt });
+      } else {
+        setErr(res.error || "Image upload failed");
+      }
+    });
+  };
 
   const save = () => {
     setErr(null);
@@ -235,9 +256,11 @@ function EditModal({
       return;
     }
     start(async () => {
-      const res = await updateProduct(product.id, patch, product.updated_at);
-      if (res.ok && res.product) onSaved(res.product);
-      else setErr(res.error || "Save failed");
+      const res = await updateProduct(product.id, patch, lockTs);
+      if (res.ok && res.product) {
+        onPatch(res.product);
+        onClose();
+      } else setErr(res.error || "Save failed");
     });
   };
 
@@ -250,6 +273,18 @@ function EditModal({
             <span className="modal-sub"><code>{product.sku}</code> · {titleCase(product.brand?.display_name)} · id {product.id}</span>
           </div>
           <button className="unlink-btn" onClick={onClose}>Close</button>
+        </div>
+
+        <div className="img-edit">
+          <Thumb src={imgUrl} alt={product.name} large />
+          <div className="img-edit-body">
+            <div className="img-edit-title">Product image</div>
+            <p>Upload a screenshot or photo (PNG/JPEG/WebP, ≤5 MB). Saved to Storage and shown everywhere.</p>
+            <label className={`btn${uploading ? "" : " btn-primary"}`} style={{ cursor: uploading ? "default" : "pointer" }}>
+              {uploading ? "Uploading…" : imgUrl ? "Replace image" : "Upload image"}
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploading} onChange={onFile} />
+            </label>
+          </div>
         </div>
 
         <div className="form-grid">
@@ -276,8 +311,8 @@ function EditModal({
         {err ? <div className="modal-err">{err}</div> : null}
 
         <div className="modal-actions">
-          <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+          <button className="btn" onClick={onClose} disabled={saving || uploading}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving || uploading}>{saving ? "Saving…" : "Save"}</button>
         </div>
       </div>
     </div>
