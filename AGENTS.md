@@ -23,11 +23,17 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
 - Local check before pushing: `npm run build` (Next 16.2.9, App Router, Turbopack, React 19).
 - `vercel.json` pins `{"framework":"nextjs"}` — **required**; without it Vercel served the root as
   404 (the project's Framework Preset was null). Don't remove it.
-- Vercel project `copetitive-tracker` (repo name has the old typo) → live domain
-  **https://iniu-emea-competitive-tracker.vercel.app** (the old `copetitive-tracker.vercel.app` 404s;
-  note `competitive-tracker.vercel.app` is an UNRELATED project — not ours). Auth code uses
-  `window.location.origin`/request origin — no domain is hardcoded, so a future domain change needs
-  only the Supabase Auth **Site URL + Redirect URLs** updated, not code.
+- Vercel project `competitive-tracker` (id `prj_qQtx1u1XPYvJVVNdvWVbLfBn8Qy5`, team
+  `team_RlytDrz5A1dh3WgC9GFzWXgo`) → live domain **https://iniu-emea-competitive.vercel.app**.
+  ⚠️ The old domain `iniu-emea-competitive-tracker.vercel.app` was **renamed away on 2026-07-10**:
+  hostnames containing the word **`tracker`** get killed by ad/tracking blocklists (corporate DNS
+  filters, uBlock/AdGuard, NextDNS) — the connection is reset before any HTTP response
+  (`ERR_CONNECTION_CLOSED`), so it looks like the site is down when it isn't. **Never put `tracker`
+  (or `analytics`, `telemetry`, `pixel`) in a public hostname.**
+- Auth code uses `window.location.origin`/request origin — no domain is hardcoded, so a domain change
+  needs only the Supabase Auth **Site URL + Redirect URLs** updated, not code. Both must be `https://`
+  and the exact callback must be allow-listed, or Supabase silently falls back to Site URL and the
+  user bounces back to the login page. See "Auth URL configuration" below.
 - Supabase project ref `upoyfwfglymcubsuopfn`. See "Pipeline" for the parent-project scripts.
 
 ## Architecture
@@ -216,6 +222,20 @@ first_pass rows whose last_seen didn't advance. Strictly exact matching — **no
   Vercel serverless throws `ENOTFOUND upoyfwfglymcubsuopfn.supabase.co` → whole site 500s. Fix:
   Restore in Supabase; if Vercel still 500s, redeploy to clear the cached DNS failure. Consider Pro.
 - From mainland China, `*.vercel.app` and `supabase.co` need the local proxy (Clash) to route those
-  domains through a node, else `ERR_CONNECTION_CLOSED` / blocked uploads.
+  domains through a node, else `ERR_CONNECTION_CLOSED` / blocked uploads. **Also `accounts.google.com`
+  is fully blocked in China** — since sign-in is Google OAuth, a China-based user can NEVER log in
+  without a proxy, no matter the domain. (Switching to Supabase email/magic-link auth would remove
+  that dependency; not done.)
+- **Auth URL configuration** (Supabase → Authentication → URL Configuration). Getting this wrong makes
+  login "succeed" then bounce straight back to the login page — because Supabase silently ignores an
+  un-allow-listed `redirect_to` and falls back to Site URL (no `?code=`, so no session):
+  - **Site URL**: `https://iniu-emea-competitive.vercel.app` — must be `https`, no trailing slash, no wildcard.
+  - **Redirect URLs** must include the exact callback the app sends (`${origin}/auth/callback`):
+    `https://iniu-emea-competitive.vercel.app/auth/callback`, plus `https://iniu-emea-competitive.vercel.app/**`
+    and `http://localhost:3000/auth/callback` for local dev.
+  - Entries with no scheme (`iniu-emea-competitive.vercel.app`) or the wrong scheme (`http://…`) are
+    silently invalid. Google Cloud Console needs **no** change on a domain rename — Google always calls
+    back to `https://upoyfwfglymcubsuopfn.supabase.co/auth/v1/callback`, never your domain.
+  - Never allow-list `https://*.vercel.app/**` — any vercel.app site could then receive your auth code.
 - `push_to_supabase` intentionally does not manage `image_url`; that column is owned end-to-end by
   `upload_images.py`. Do not add it back to the push payload.

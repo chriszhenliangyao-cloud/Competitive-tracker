@@ -257,6 +257,26 @@ server action (`src/app/library/actions.ts`). Guardrails:
 - **PRECONDITION now active**: since specs live in the cloud, do NOT run Model-A `push_to_supabase`
   (library scope) — it overwrites `products` from local xlsx and would revert cloud edits.
 
+## Domain rename + auth URL fix — "can't open / bounced back to login" (2026-07-10)
+Colleagues (EU) couldn't reach the app; Chris couldn't either without a proxy, while the ERP worked on
+a direct connection. It turned out to be **three independent problems**, none of them app bugs:
+1. **Hostname contained `tracker`** → ad/tracking blocklists (corporate DNS filters, uBlock/AdGuard,
+   NextDNS) reset the connection before any HTTP response → `ERR_CONNECTION_CLOSED`, looks like the
+   site is down. Both projects are on `*.vercel.app`; the ERP's hostname has no such keyword, which is
+   the entire reason it "just worked". **Fixed by renaming the domain** →
+   `https://iniu-emea-competitive.vercel.app`. Never put `tracker`/`analytics`/`telemetry` in a hostname.
+2. **`accounts.google.com` is blocked in China** → sign-in is Google OAuth, so from China a proxy is
+   mandatory regardless of domain. (The ERP presumably doesn't use Google auth — that's the real
+   answer to "why does the ERP not care about direct vs proxy".)
+3. **Supabase Auth URL Configuration was wrong** → Site URL was `http://…` (not https) and the exact
+   callback `https://iniu-emea-competitive.vercel.app/auth/callback` was NOT in Redirect URLs; two
+   entries were malformed (no scheme / `http`). Supabase then ignores the app's `redirect_to`, falls
+   back to Site URL **without `?code=`**, so no session is exchanged and middleware bounces the user
+   back to `/auth/login`. Fixed by setting Site URL to https and allow-listing the exact callback.
+Diagnostic rule learned: `ERR_CONNECTION_CLOSED` = network/middlebox reset **before** any HTTP
+response, so it can never be caused by middleware / next.config / redirects / geo rules (those return
+an HTTP status). Prove the app is fine by fetching it from a neutral network first.
+
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
   351 distinct listings — Model A `push_to_supabase` used a date-stamped `source_file` in the dedupe
