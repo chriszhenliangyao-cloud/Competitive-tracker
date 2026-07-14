@@ -277,6 +277,34 @@ Diagnostic rule learned: `ERR_CONNECTION_CLOSED` = network/middlebox reset **bef
 response, so it can never be caused by middleware / next.config / redirects / geo rules (those return
 an HTTP status). Prove the app is fine by fetching it from a neutral network first.
 
+## Model B first full closed-loop weekly run — VERIFIED (2026-07-13/14, W29)
+The first real end-to-end Model B weekly run succeeded — local scrapes raw only, cloud maps, dashboard
+live; no local map/xlsx/dashboard-regenerate. Driven start-to-finish via the supervised runners.
+- **Competitors** (`run_scrape_raw.py`, supervised, ~3.9h, single attempt, 0 restarts): scraped 828
+  raw rows across all 13 retailers → `raw_scrape_rows` (run_id 3) → one `map_cycle` at the end:
+  `mapped 566, new_listing 208, library_missing 54, delisted 119, own_brand_skipped 0`, cycle_date
+  2026-07-13 (W29). 828 `price_snapshots` for W29, 13 retailers.
+- **Mapping engine proven correct**: of the 208 new_listing, **0** had a raw_sku that would have matched
+  the library (i.e. zero missed maps); 201 had NO page SKU (correctly → review, no fuzzy), 7 are genuinely
+  not in the library. So the high new_listing count is real churn / no-SKU pages at big channels
+  (mediaexpert alone = 108), not a bug.
+- **Circuit breaker worked**: 3 pairs scraped 0 vs prior-active (elcorteingles/anker 0v3, mediamarkt/ugreen
+  0v4, xkom/anker 0v22) were reported "absent from raw, cloud untouched (safe, not delisted)" — no false
+  delist. No partial (<50%) hold-backs this run.
+- **Incremental upload + resume worked** (P2): rows uploaded per-retailer as each finished.
+- **Reviews queue stayed stable** (351 → 349, did NOT balloon by +262) — dedup trigger + resolve-permanence
+  mean recurring no-SKU codes don't re-queue; only genuinely-new listings add.
+- **INIU own lane** (`run_iniu_prices.py` → `push_iniu_prices.py --write`, ~18min): 51 CSV rows → 46
+  matched (code 45 + ean 1), all mapped; cycle_date 2026-07-14 (also W29, dashboard merges by ISO week).
+  5 UNMATCHED by design (no fuzzy): 3× MagPro Slim 10000 45W (new MediaExpert codes 2141094/95/96) +
+  2× PowerPaw (MediaExpert 2058103, PCComponentes 10970785) — need `iniu_products` + bridge entries.
+- **Operator setup**: service_role key now lives in project-root `.env` (gitignored, chmod 600, outside
+  web/ so rsync never touches it); `channel/config.py` + `push_iniu_prices.py` auto-load it, so no manual
+  `export`. Run from `~/Desktop/competitive追踪`; `set -a; source .env; set +a` when driving via shell.
+- **Loose ends**: `raw_scrape_rows` now ~837 rows (staging, map_cycle already consumed it — safe to purge
+  per run to keep the DB lean; not yet done). 349 pending reviews to work through in `/reviews`. Add the
+  5 unmatched INIU products to the catalogue so they map next cycle.
+
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
   351 distinct listings — Model A `push_to_supabase` used a date-stamped `source_file` in the dedupe
