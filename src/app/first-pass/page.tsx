@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { catFilter } from "@/lib/category";
 import FirstPassTable, { type FpRow } from "./FirstPassTable";
 
 export const dynamic = "force-dynamic";
@@ -46,16 +47,18 @@ export default async function FirstPassPage() {
   // show here instantly (single source of truth); unmapped rows fall back to the
   // raw scrape (marked "raw") as curation input.
   const [fpRes, listRes, prodRes] = await Promise.all([
-    sb
-      .from("first_pass_observations")
-      .select(
-        `id, product_name, sku, ean, retailer_id, brand_id, retailer_product_code, price, promo_price, currency,
+    catFilter(
+      sb
+        .from("first_pass_observations")
+        .select(
+          `id, product_name, sku, ean, retailer_id, brand_id, retailer_product_code, price, promo_price, currency,
          in_stock, url, image_url, capacity, power, usb_ports, scraped_date,
          brand:brands(display_name), retailer:retailers(display_name, country)`,
-      )
-      .limit(5000),
-    sb.from("listings").select("retailer_id, retailer_product_code, product_id").not("product_id", "is", null).limit(20000),
-    sb.from("products").select("id, sku, brand_id, capacity, wired_power, usb_ports").limit(5000),
+        )
+        .limit(5000),
+    ),
+    catFilter(sb.from("listings").select("retailer_id, retailer_product_code, product_id").not("product_id", "is", null).limit(20000)),
+    catFilter(sb.from("products").select("id, sku, brand_id, capacity, wired_power, usb_ports").limit(5000)),
   ]);
 
   const products = (prodRes.data ?? []) as unknown as Prod[];

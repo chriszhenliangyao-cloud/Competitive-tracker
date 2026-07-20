@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { catFilter } from "@/lib/category";
 import { getChannelRows } from "@/lib/data";
 import { getScope, allowsCountry } from "@/lib/scope";
 import { effectivePrice, toEUR } from "@/lib/format";
@@ -33,7 +34,7 @@ type LinkRow = {
 export async function getDashboardData(): Promise<DashboardData> {
   const sb = getSupabase();
   const [iniuRes, linkRes, hiddenRes, channel, priceRes] = await Promise.all([
-    sb.from("iniu_products").select("id, sku, name, image_url").order("name"),
+    catFilter(sb.from("iniu_products").select("id, sku, name, image_url").order("name")),
     sb
       .from("competitive_links")
       .select("iniu_product_id, competitor:products(id, sku, name, image_url, rrp, rrp_currency, brand:brands(display_name))")

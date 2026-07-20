@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { catFilter, ACTIVE_CATEGORY_ID } from "@/lib/category";
 import ReviewsTable, { type ReviewRow, type SkuOption } from "./ReviewsTable";
 
 export const dynamic = "force-dynamic";
@@ -10,14 +11,15 @@ export default async function ReviewsPage() {
       .from("mapping_reviews")
       .select(
         `id, listing_id, status, suggested_sku, correct_sku, product_name, image_url, source_file, created_at,
-         listing:listings(status, retailer_product_code, raw_name, url,
+         listing:listings!inner(category_id, status, retailer_product_code, raw_name, url,
            retailer:retailers(display_name, country),
            brand:brands(display_name, key))`,
       )
+      .eq("listing.category_id", ACTIVE_CATEGORY_ID)
       .eq("status", "pending")
       .order("id", { ascending: false })
       .limit(20000),
-    sb.from("products").select("sku, name, brand:brands(display_name, key)").limit(5000),
+    catFilter(sb.from("products").select("sku, name, brand:brands(display_name, key)").limit(5000)),
   ]);
 
   // all-history import creates one pending review per (file,row); collapse to one

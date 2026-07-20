@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { catFilter } from "@/lib/category";
 import { toEUR } from "@/lib/format";
 
 // INIU-anchored roadmap data. INIU products (collapsed to base models) are the
@@ -60,14 +61,14 @@ type ProdRow = {
 export async function getRoadmapData(allowedCountries: string[] | null = null): Promise<RoadmapData> {
   const sb = getSupabase();
   const [iniuRes, priceRes, linkRes, hiddenRes, prodRes, listRes] = await Promise.all([
-    sb.from("iniu_products").select("id,sku,name,capacity,image_url"),
+    catFilter(sb.from("iniu_products").select("id,sku,name,capacity,image_url")),
     sb.from("iniu_price_snapshots").select("iniu_product_id,price,currency"),
     sb.from("competitive_links").select("iniu_product_id,competitor_product_id").limit(100000),
     sb.from("hidden_competitive_links").select("iniu_product_id,competitor_product_id").limit(100000),
-    sb.from("products").select("id,name,rrp,rrp_currency,capacity,image_url,brand:brands(key)"),
+    catFilter(sb.from("products").select("id,name,rrp,rrp_currency,capacity,image_url,brand:brands(key)")),
     allowedCountries === null
       ? Promise.resolve({ data: [] as unknown[] })
-      : sb.from("listings").select("product_id, retailer:retailers(country)").limit(100000),
+      : catFilter(sb.from("listings").select("product_id, retailer:retailers(country)").limit(100000)),
   ]);
 
   // competitor product -> set of countries it's sold in (for sales scoping only).

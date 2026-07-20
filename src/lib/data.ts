@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase";
+import { catFilter } from "./category";
 
 export type Snapshot = {
   scraped_date: string | null;
@@ -55,11 +56,13 @@ const normId = (s: string | null | undefined): string => {
 // so products lacking their own image can borrow the matching first-pass image.
 async function getFirstPassImageIndex(): Promise<Map<string, string>> {
   const sb = getSupabase();
-  const { data } = await sb
-    .from("first_pass_observations")
-    .select("brand_id, sku, ean, retailer_product_code, image_url")
-    .not("image_url", "is", null)
-    .limit(20000);
+  const { data } = await catFilter(
+    sb
+      .from("first_pass_observations")
+      .select("brand_id, sku, ean, retailer_product_code, image_url")
+      .not("image_url", "is", null)
+      .limit(20000),
+  );
   const idx = new Map<string, string>();
   for (const o of (data ?? []) as Record<string, unknown>[]) {
     const url = o.image_url as string;
@@ -75,16 +78,18 @@ async function getFirstPassImageIndex(): Promise<Map<string, string>> {
 export async function getChannelRows(): Promise<ChannelRow[]> {
   const sb = getSupabase();
   const [{ data, error }, fpImages] = await Promise.all([
-    sb
-      .from("listings")
-      .select(
-        `id, status, mapping_method, retailer_product_code, raw_name, raw_sku, raw_ean, url, brand_id, first_seen, last_seen,
+    catFilter(
+      sb
+        .from("listings")
+        .select(
+          `id, status, mapping_method, retailer_product_code, raw_name, raw_sku, raw_ean, url, brand_id, first_seen, last_seen,
          brand:brands(key, display_name),
          retailer:retailers(key, display_name, country, currency),
          product:products(sku, name, capacity, wired_power, wireless_power, size, weight, usb_ports, magsafe, ean, rrp, rrp_currency, image_url),
          snapshots:price_snapshots(scraped_date, price, promo_price, currency, in_stock)`,
-      )
-      .limit(5000),
+        )
+        .limit(5000),
+    ),
     getFirstPassImageIndex(),
   ]);
   if (error) throw error;
