@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import CategoryTabs from "./CategoryTabs";
+import type { CategoryKey } from "@/lib/category";
 
 type Counts = {
   channel: number;
@@ -17,10 +19,12 @@ export default function Sidebar({
   counts,
   userEmail,
   isAdmin = false,
+  category,
 }: {
   counts: Counts;
   userEmail?: string | null;
   isAdmin?: boolean;
+  category: CategoryKey;
 }) {
   const path = usePathname();
   const is = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
@@ -36,8 +40,10 @@ export default function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-brand">
         <strong>Competitive Tracker</strong>
-        <span>INIU powerbank market</span>
+        <span>INIU competitive market</span>
       </div>
+
+      <CategoryTabs active={category} />
 
       <nav className="nav-section">
         <div className="nav-section-label">Overview</div>

@@ -1,5 +1,6 @@
 import { getSupabase } from "@/lib/supabase";
 import { catFilter } from "@/lib/category";
+import { getCategoryId } from "@/lib/category-server";
 import FirstPassTable, { type FpRow } from "./FirstPassTable";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,7 @@ const up = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
 
 export default async function FirstPassPage() {
   const sb = getSupabase();
+  const catId = await getCategoryId();
   // Specs are NOT read from first_pass's own (frozen, legacy) columns anymore.
   // They come from the CANONICAL products row that the retailer_product_code is
   // mapped to — resolved the same way map_cycle does: primary = the code's
@@ -56,9 +58,10 @@ export default async function FirstPassPage() {
          brand:brands(display_name), retailer:retailers(display_name, country)`,
         )
         .limit(5000),
+      catId,
     ),
-    catFilter(sb.from("listings").select("retailer_id, retailer_product_code, product_id").not("product_id", "is", null).limit(20000)),
-    catFilter(sb.from("products").select("id, sku, brand_id, capacity, wired_power, usb_ports").limit(5000)),
+    catFilter(sb.from("listings").select("retailer_id, retailer_product_code, product_id").not("product_id", "is", null).limit(20000), catId),
+    catFilter(sb.from("products").select("id, sku, brand_id, capacity, wired_power, usb_ports").limit(5000), catId),
   ]);
 
   const products = (prodRes.data ?? []) as unknown as Prod[];

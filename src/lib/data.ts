@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase";
 import { catFilter } from "./category";
+import { getCategoryId } from "./category-server";
 
 export type Snapshot = {
   scraped_date: string | null;
@@ -56,12 +57,14 @@ const normId = (s: string | null | undefined): string => {
 // so products lacking their own image can borrow the matching first-pass image.
 async function getFirstPassImageIndex(): Promise<Map<string, string>> {
   const sb = getSupabase();
+  const catId = await getCategoryId();
   const { data } = await catFilter(
     sb
       .from("first_pass_observations")
       .select("brand_id, sku, ean, retailer_product_code, image_url")
       .not("image_url", "is", null)
       .limit(20000),
+    catId,
   );
   const idx = new Map<string, string>();
   for (const o of (data ?? []) as Record<string, unknown>[]) {
@@ -77,6 +80,7 @@ async function getFirstPassImageIndex(): Promise<Map<string, string>> {
 
 export async function getChannelRows(): Promise<ChannelRow[]> {
   const sb = getSupabase();
+  const catId = await getCategoryId();
   const [{ data, error }, fpImages] = await Promise.all([
     catFilter(
       sb
@@ -89,6 +93,7 @@ export async function getChannelRows(): Promise<ChannelRow[]> {
          snapshots:price_snapshots(scraped_date, price, promo_price, currency, in_stock)`,
         )
         .limit(5000),
+      catId,
     ),
     getFirstPassImageIndex(),
   ]);

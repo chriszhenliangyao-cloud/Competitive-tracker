@@ -1,5 +1,6 @@
 import { getSupabase } from "@/lib/supabase";
 import { catFilter } from "@/lib/category";
+import { getCategoryId } from "@/lib/category-server";
 import { getChannelRows } from "@/lib/data";
 import { effectivePrice, toEUR } from "@/lib/format";
 import IniuTable, { type IniuProduct, type Competitor, type PriceRow } from "./IniuTable";
@@ -28,12 +29,14 @@ type LinkRow = {
 
 export default async function IniuPage() {
   const sb = getSupabase();
+  const catId = await getCategoryId();
   const [iniuRes, linkRes, hiddenRes, channel, priceRes] = await Promise.all([
     catFilter(
       sb
         .from("iniu_products")
         .select("id, sku, name, capacity, size, weight, wired_power, wireless_power, usb_ports, magsafe, image_url")
         .order("name"),
+      catId,
     ),
     sb
       .from("competitive_links")

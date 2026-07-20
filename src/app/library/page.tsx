@@ -1,11 +1,13 @@
 import { getSupabase } from "@/lib/supabase";
 import { catFilter } from "@/lib/category";
+import { getCategoryId } from "@/lib/category-server";
 import LibraryTable, { type LibProduct } from "./LibraryTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function LibraryPage() {
   const sb = getSupabase();
+  const catId = await getCategoryId();
   const { data } = await catFilter(
     sb
       .from("products")
@@ -14,6 +16,7 @@ export default async function LibraryPage() {
       )
       .order("name")
       .limit(5000),
+    catId,
   );
   return <LibraryTable products={(data ?? []) as unknown as LibProduct[]} />;
 }
