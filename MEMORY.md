@@ -305,6 +305,43 @@ live; no local map/xlsx/dashboard-regenerate. Driven start-to-finish via the sup
   per run to keep the DB lean; not yet done). 349 pending reviews to work through in `/reviews`. Add the
   5 unmatched INIU products to the catalogue so they map next cycle.
 
+## Multi-category groundwork for the charger line — P0 + P1 done (2026-07-20)
+The schema was multi-category from day one (`categories`: powerbank=1, charger=2; products /
+listings / first_pass_observations / iniu_products / import_runs all carry `category_id`), but
+nothing actually *used* it — every query and `map_cycle` implicitly assumed powerbank. The charger
+line (`插头/`) is a separate local project with 15 retailer adapters, its own charger-specific
+`sku_rules.py` (anker `A2xxxxxx` vs powerbank `A1xxx`, belkin `WCA/WIA/BPZ`, isy, silvermonkey,
+xline) and 8 brand libraries, but has **never been run end-to-end** — cloud holds 0 charger rows and
+its last local artefacts are from 2026-05-14.
+- **P0 (code only, no DB change)**: every read is now pinned to powerbank via `src/lib/category.ts`
+  (`ACTIVE_CATEGORY_ID`, `catFilter`). Applied to Dashboard, Channel, Library, First Pass, INIU,
+  Roadmap, the HTML export and the sidebar counts; `mapping_reviews` has no category_id so it is
+  scoped through an inner join on its listing. Verified no behaviour change: per-table totals ==
+  category=1 counts (547 / 1041 / 1012 / 24 / 357), zero null categories. When the category switcher
+  lands, only `category.ts` changes — call sites stay put.
+  NOTE: `catFilter<T>` deliberately takes an UNCONSTRAINED generic and casts internally; constraining
+  it to the Supabase builder shape makes TS blow up with "Type instantiation is excessively deep".
+- **P1 (DB + pipeline)**:
+  - `brand_retailer_targets` gained `category_id` (backfilled powerbank) and its PK became
+    (category_id, brand_id, retailer_id) — the same brand×retailer is a valid target in both lines.
+  - `map_cycle` is category-aware. It previously pinned every row to the FIRST category
+    (`order by sort_order limit 1`) and ignored `raw_scrape_rows.category_key`. **It also had a real
+    cross-category false-delist bug**: the delist sweep matched on (retailer, brand) only, so a
+    charger scrape of anker@mediaexpert would have delisted anker's POWERBANK codes there. Every
+    memory lookup, library lookup, upsert and the delist sweep is now scoped by the row's own
+    category. Replayed over run 4: all 711 rows processed (proves the categories join resolves every
+    row), 472/181/58 split, delisted 0 (correct for an idempotent replay), zero rows written to a
+    wrong category.
+  - `run_scrape_raw.py` gained `--category` (default powerbank): targets are fetched per category and
+    `category_key` is stamped from it. The circuit-breaker baseline is **also** category-scoped —
+    otherwise a charger scrape would be compared against the powerbank catalogue size and held back.
+  - Verified via the live REST query the script uses: powerbank 53 enabled targets, charger 0.
+- **Still to do for chargers**: P2 = seed `brand_retailer_targets` for charger, import the 8 brand
+  libraries into `products` (category 2), smoke-test 1–2 channels, then full run. P3 = category
+  switcher UI + charger-specific views (matrix axis should be **power (W) × price**, not capacity).
+  P4 (needs a decision) = does INIU sell chargers? If so it needs `iniu_products` rows, an own-price
+  lane and competitive links.
+
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
   351 distinct listings — Model A `push_to_supabase` used a date-stamped `source_file` in the dedupe
