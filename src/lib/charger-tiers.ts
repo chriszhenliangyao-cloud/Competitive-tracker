@@ -1,19 +1,18 @@
 // Charger segmentation: form factor first, then wattage.
 //
 // Power banks are organised by capacity; chargers are organised by what the
-// product IS (wall / car / desktop / wireless / cable) and then by its power
-// band, because
-// that is how the category is merchandised and priced.
+// product IS (wall / car / desktop / wireless / cable) and then, for wall, by
+// power band — that is how the category is merchandised and priced.
 //
 // Order matters. Wireless is decided first (a wireless base often mentions a
 // bundled cable), then cable — which must NOT catch a charger that merely ships
-// with one — "Chargeur + Cable Adeqwat 65W" and "…avec câble" are
-// chargers, and in this data ~80 listings look like that versus a single real
-// standalone cable. So a cable only counts when the cable word is the head noun
-// and no charger word precedes it.
+// with one: in this data ~80 listings read "Chargeur + Cable Adeqwat 65W" or
+// "…avec câble" against 43 genuine standalone cables. So a cable only counts
+// when the cable word is the head noun.
 
 export type TierKey =
-  | "wall_45" | "wall_65" | "wall_100" | "wall_150" | "wall_max" | "wall_unknown"
+  | "wall_45" | "wall_45_65" | "wall_65_70" | "wall_70"
+  | "wall_100" | "wall_100_140" | "wall_140" | "wall_unknown"
   | "car"
   | "desk_lo" | "desk_hi"
   | "wireless"
@@ -25,11 +24,13 @@ export const CHARGER_TIERS: Tier[] = [
   // Wall is the bulk of the category, so it carries the full power ladder.
   // The other form factors stay single/coarse: car is 19/32 under 45W and
   // wireless 49/55, so splitting them the same way would be ~20 empty sections.
-  { key: "wall_45",      label: "Wall <45W",       sub: "Phone / tablet" },
-  { key: "wall_65",      label: "Wall 45–65W",     sub: "Fast charge / ultrabook" },
-  { key: "wall_100",     label: "Wall 65–100W",    sub: "Laptop" },
-  { key: "wall_150",     label: "Wall 100–150W",   sub: "Multi-device" },
-  { key: "wall_max",     label: "Wall >150W",      sub: "High-power multi-port" },
+  { key: "wall_45",      label: "Wall ≤45W",       sub: "Phone / tablet" },
+  { key: "wall_45_65",   label: "Wall 45–65W",     sub: "Between the two standard ratings" },
+  { key: "wall_65_70",   label: "Wall 65–70W",     sub: "The 65W class" },
+  { key: "wall_70",      label: "Wall 70W",        sub: "The 70W class" },
+  { key: "wall_100",     label: "Wall 100W",       sub: "The 100W class" },
+  { key: "wall_100_140", label: "Wall 100–140W",   sub: "Multi-device" },
+  { key: "wall_140",     label: "Wall >140W",      sub: "High-power multi-port" },
   // Not folded into <45W: that would assert a wattage we never read. These are
   // listings whose page stated no power — they move into a band once a scrape
   // picks one up.
@@ -59,7 +60,8 @@ export function wattOf(raw: string | null | undefined): number | null {
   return n > 0 && n <= MAX_PLAUSIBLE_W ? n : null;
 }
 
-const CHARGER_WORD = /chargeur|ładowarka|ladowarka|cargador|caricabatterie|charger|netzteil|zasilacz/i;
+const CHARGER_WORD =
+  /chargeur|ładowarka|ladowarka|cargador|caricabatterie|charger|netzteil|zasilacz|ladeger[äa]t|oplader/i;
 const CABLE_WORD = /\b(kabel|câble|cable|cavo|przewód|przewod)\b/i;
 const CAR_WORD = /allume[- ]?cigare|samochod|\bcar charger\b|voiture|coche|\bkfz\b|auto[- ]?ladeger|\bcar\b/i;
 const DESK_WORD = /desktop|sobremesa|stacja|station|bureau|biurk/i;
@@ -76,7 +78,7 @@ const WIRELESS_WORD =
 // wireless Spanish listings all say "inalámbrica" as well.
 
 /**
- * Classify a charger-category product/listing into one of the 8 tiers.
+ * Classify a charger-category product/listing into one of the 14 tiers.
  * `name` is the product or raw listing name; `power` the wired_power/power field.
  */
 export function tierOf(name: string | null | undefined, power: string | null | undefined): TierKey {
@@ -90,12 +92,16 @@ export function tierOf(name: string | null | undefined, power: string | null | u
   //    charger word, so the cable rule below would otherwise claim them.
   if (WIRELESS_WORD.test(n)) return "wireless";
 
-  // 2. Standalone cable — cable word present AND not preceded by a charger word.
-  //    ("Cable USB - Belkin CAB022hq2M, 15W" yes; "Chargeur + Cable …" no.)
+  // 2. Standalone cable.
   const cableAt = n.search(CABLE_WORD);
   if (cableAt >= 0) {
     const before = n.slice(0, cableAt);
-    if (!CHARGER_WORD.test(before)) {
+    // A standalone cable leads with the cable word ("Cable USB-C — CellularLine…").
+    // Anything where the cable is appended to something else is a charger with a
+    // bundled cable, which shows up two ways: a charger word earlier in the name,
+    // or a "+" joining it on ("Ugreen X513 30W GaN 1x USB-C + kabel USB-C 1m",
+    // which names no charger at all so the word test alone misses it).
+    if (!CHARGER_WORD.test(before) && !before.includes("+")) {
       return (w ?? 0) > 150 ? "cable_hi" : "cable_lo";
     }
   }
@@ -106,13 +112,20 @@ export function tierOf(name: string | null | undefined, power: string | null | u
   // 4. Desktop / station, split at 200W.
   if (DESK_WORD.test(n)) return (w ?? 0) > 200 ? "desk_hi" : "desk_lo";
 
-  // 5. Everything else is a wall charger, on the full power ladder.
-  //    Boundaries are inclusive upward: 45W sits in 45–65, 65W in 45–65,
-  //    100W in 65–100, 150W in 100–150.
+  // 5. Everything else is a wall charger, on the power ladder. The bands follow
+  //    the standard ratings the category is sold on (45 / 65 / 70 / 100 / 140),
+  //    so several are narrow or exact rather than evenly spaced:
+  //      ≤45 · 45<x<65 · 65≤x<70 · 70≤x<100 · =100 · 100<x≤140 · >140
+  //    The 70W band deliberately runs up to 100 rather than stopping at 70: the
+  //    spec asked for an exact "70W" tier, which would drop anything 71–99W on
+  //    the floor. Nothing sits there today (wall wattages jump 67 → 70 → 100),
+  //    so this changes no current row — it just means no listing can vanish.
   if (w == null) return "wall_unknown";
-  if (w < 45) return "wall_45";
-  if (w <= 65) return "wall_65";
-  if (w <= 100) return "wall_100";
-  if (w <= 150) return "wall_150";
-  return "wall_max";
+  if (w <= 45) return "wall_45";
+  if (w < 65) return "wall_45_65";
+  if (w < 70) return "wall_65_70";
+  if (w < 100) return "wall_70";
+  if (w === 100) return "wall_100";
+  if (w <= 140) return "wall_100_140";
+  return "wall_140";
 }
