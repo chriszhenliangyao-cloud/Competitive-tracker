@@ -805,3 +805,29 @@ tr.row-hidden td .sub {
   opacity: 0.5;
   cursor: default;
 }
+
+/* Explanatory line under an edit field — used where a write has consequences
+   beyond the field itself (a SKU rename moves channel mappings; a spec edit
+   lands in the Library or on the channel row depending on mapping). */
+.field-note {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 4px 0 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.modal-foot .field-note {
+  margin: 0;
+  max-width: 60%;
+}

@@ -7,7 +7,7 @@ import { userFor } from "./access";
 // countries === null  → admin, sees everything.
 // countries === []    → sees nothing (unknown/unauthenticated — defensive default).
 // countries === [..]  → sales, limited to those ISO-2 country codes.
-export type Scope = { email: string | null; role: "admin" | "sales" | null; countries: string[] | null };
+export type Scope = { email: string | null; role: "admin" | "sales" | null; countries: string[] | null; canEdit: boolean };
 
 export const getScope = cache(async (): Promise<Scope> => {
   try {
@@ -15,10 +15,10 @@ export const getScope = cache(async (): Promise<Scope> => {
     const { data } = await sb.auth.getUser();
     const email = data.user?.email ?? null;
     const u = userFor(email);
-    if (!u) return { email, role: null, countries: [] };
-    return { email, role: u.role, countries: u.countries };
+    if (!u) return { email, role: null, countries: [], canEdit: false };
+    return { email, role: u.role, countries: u.countries, canEdit: u.canEdit === true };
   } catch {
-    return { email: null, role: null, countries: [] };
+    return { email: null, role: null, countries: [], canEdit: false };
   }
 });
 
@@ -37,4 +37,12 @@ export function allowsCountry(scope: Scope, country: string | null | undefined):
 export async function requireAdmin(): Promise<string | null> {
   const scope = await getScope();
   return scope.role === "admin" ? null : "Not authorized";
+}
+
+/** Gate for writes to catalogue DATA (specs, identity, images). Narrower than
+ *  requireAdmin on purpose — see AppUser.canEdit. Server-side, so hiding the UI
+ *  is cosmetic and this is the real check. */
+export async function requireEditor(): Promise<string | null> {
+  const scope = await getScope();
+  return scope.canEdit ? null : "Read-only — ask Chris to make this change";
 }

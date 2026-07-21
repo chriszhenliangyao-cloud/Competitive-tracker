@@ -9,10 +9,18 @@
 //                 (Country codes are ISO-2, matching retailers.country: FR/ES/PL/DE.)
 
 export type Role = "admin" | "sales";
-export type AppUser = { role: Role; countries: string[] | null }; // null = all countries
+export type AppUser = {
+  role: Role;
+  countries: string[] | null; // null = all countries
+  /** May change catalogue DATA (Library / First Pass fields, dashboard power).
+   *  Separate from `role`: an admin sees everything and can work the review
+   *  queue, but editing product identity and specs is narrower still — a wrong
+   *  SKU rewrites the mapping key every future cycle resolves through. */
+  canEdit?: boolean;
+};
 
 export const USERS: Record<string, AppUser> = {
-  "chris.yao@iniushop.com": { role: "admin", countries: null },
+  "chris.yao@iniushop.com": { role: "admin", countries: null, canEdit: true },
   "julio.pu@iniushop.com": { role: "admin", countries: null },
   "jiwen.wang@iniushop.com": { role: "admin", countries: null },
   "victor.rosiere@iniushop.com": { role: "sales", countries: ["FR"] },
@@ -30,4 +38,9 @@ export function isAllowedEmail(email: string | null | undefined): boolean {
 export function userFor(email: string | null | undefined): AppUser | null {
   if (!email) return null;
   return USERS[email.trim().toLowerCase()] ?? null;
+}
+
+/** Everyone else is read-only on catalogue data. */
+export function canEditData(email: string | null | undefined): boolean {
+  return userFor(email)?.canEdit === true;
 }

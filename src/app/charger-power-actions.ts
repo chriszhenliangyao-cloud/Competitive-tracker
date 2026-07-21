@@ -2,7 +2,7 @@
 
 import { getSupabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/scope";
+import { requireEditor } from "@/lib/scope";
 import { revalidatePath } from "next/cache";
 
 // Editing power from the charger dashboard.
@@ -47,7 +47,7 @@ export async function updateChargerPower(
   target: { productId: number | null; listingIds: number[] },
   raw: string,
 ): Promise<Result> {
-  const denied = await requireAdmin();
+  const denied = await requireEditor();
   if (denied) return { ok: false, error: denied };
 
   const power = normalisePower(raw);

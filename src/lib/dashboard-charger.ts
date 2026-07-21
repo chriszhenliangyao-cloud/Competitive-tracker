@@ -47,7 +47,7 @@ export type ChargerDashboardData = {
   sections: ChargerSection[];
   countries: string[];
   stats: { products: number; listings: number; retailers: number; unmapped: number };
-  /** Only admins may edit power; sales get a read-only board. */
+  /** Catalogue-data editing is Chris-only (AppUser.canEdit); everyone else reads. */
   canEdit: boolean;
 };
 
@@ -224,6 +224,6 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
     sections,
     countries: [...countries].sort(),
     stats: { products: byKey.size, listings: listingCount, retailers: retailers.size, unmapped },
-    canEdit: scope.role === "admin",
+    canEdit: scope.canEdit,
   };
 }

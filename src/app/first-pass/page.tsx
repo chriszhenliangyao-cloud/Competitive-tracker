@@ -1,3 +1,4 @@
+import { getScope } from "@/lib/scope";
 import { getSupabase } from "@/lib/supabase";
 import { catFilter } from "@/lib/category";
 import { getCategoryId } from "@/lib/category-server";
@@ -108,5 +109,5 @@ export default async function FirstPassPage() {
     };
   });
 
-  return <FirstPassTable rows={rows} />;
+  return <FirstPassTable rows={rows} canEdit={(await getScope()).canEdit} />;
 }

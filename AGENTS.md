@@ -63,6 +63,11 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
     Sidebar also hides admin-only links for sales (cosmetic; middleware is the real gate).
   - To change who/role/country: edit `src/lib/access.ts` and push. Do NOT try to enforce this with
     RLS policies — service-role bypasses them; keep enforcement in middleware + page filters.
+  - **`canEdit` is a THIRD axis, narrower than role** (`AppUser.canEdit`, currently Chris only):
+    who may change catalogue DATA — Library fields incl. SKU, First Pass fields, dashboard power.
+    Gated by `requireEditor()`; hiding the buttons is cosmetic. Admin still governs *workflow*
+    (`/reviews` resolve, INIU hide/unhide) via `requireAdmin()`, so colleagues can keep working the
+    review queue without being able to rewrite specs or identity.
 
 ## Pages (and what each reads)
 | Route | Purpose | Main tables |
@@ -80,7 +85,8 @@ Every field has ONE home table. Every view JOINs to the home; editing writes the
 
 | Field class | Home (source of truth) | Edited via |
 |---|---|---|
-| Competitor specs/identity: capacity, wired_power, wireless_power, usb_ports, size, weight, magsafe, ean, name, rrp, image_url | **`products`** | Library page · charger Dashboard power cell (mapped rows) |
+| Competitor specs/identity: capacity, wired_power, wireless_power, usb_ports, size, weight, magsafe, ean, name, rrp, image_url | **`products`** | Library page · First Pass (mapped rows) · charger Dashboard power cell |
+| Competitor SKU (the identity the mapping key derives from) | **`products.sku`** | Library page → `rename_product_sku` ONLY |
 | INIU's own specs | **`iniu_products`** | INIU page |
 | Channel mapping & presence: retailer_product_code→SKU, status, first_seen/last_seen/is_active | **`first_pass_observations`** / **`listings`** | First Pass / Reviews |
 | Competitor price history | **`price_snapshots`** | not hand-edited (from scrapes) |
@@ -94,6 +100,22 @@ Every field has ONE home table. Every view JOINs to the home; editing writes the
 > (home, INIU, Roadmap) filter these pairs out. A "Show hidden (N)" toggle un-hides. This is the
 > durable analog of the old local dashboard, whose only *persistent* competitor removal edited the
 > INIU spec xlsx directly (its cosmetic "exclude" toggle stored nothing). See MEMORY.md → hide.
+
+> **Editing SKU** goes through the `rename_product_sku` SQL function, never a column update. Two
+> things must happen together or the mapping breaks: `first_pass_observations.sku` stores the SKU as
+> TEXT and is the code→SKU memory `map_cycle` resolves through, so rows left on the old string fail
+> the library lookup next cycle and flip every affected listing to `library_missing`; and
+> (category_id, brand_id, sku_key) is unique, so a new SKU can collide — that is a MERGE and is
+> refused rather than half-done. `sku_key` stays trigger-derived so the normalisation rule has one
+> implementation. Verified in a rolled-back test: 3 memory rows carried over, collision and empty
+> refused.
+
+> **First Pass editing** follows the same routing as the charger power cell: a MAPPED row's spec
+> edits write `products` (the Library, so they propagate), an UNMAPPED row writes its own raw columns
+> with `power_manual` / `usb_ports_manual` set. The SKU field there is the MAPPING decision and goes
+> through `resolve_review`, the same path the Reviews page uses, so first_pass, `listings.product_id`
+> and the queue move together. Do NOT add a plain first_pass.sku update — it would leave the listing
+> pointing at the old product.
 
 > Power on the charger Dashboard is editable in place, and the write follows the contract rather
 > than bypassing it: a **mapped** row writes `products.wired_power` (the Library, so it propagates

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
 import { fmtMoney, titleCase } from "@/lib/format";
-import { updateProduct, uploadProductImage, type ProductPatch } from "./actions";
+import { updateProduct, uploadProductImage, renameProductSku, type ProductPatch } from "./actions";
 
 export type LibProduct = {
   id: number;
@@ -30,7 +30,7 @@ const CURRENCIES = ["EUR", "PLN", "GBP", "USD"];
 
 const filled = (p: LibProduct) => KEY_FIELDS.filter((f) => p[f] != null && String(p[f]).trim() !== "").length;
 
-export default function LibraryTable({ products }: { products: LibProduct[] }) {
+export default function LibraryTable({ products, canEdit }: { products: LibProduct[]; canEdit: boolean }) {
   const [rows, setRows] = useState(products);
   useEffect(() => setRows(products), [products]); // pick up server revalidations
   const [brand, setBrand] = useState("");
@@ -173,7 +173,9 @@ export default function LibraryTable({ products }: { products: LibProduct[] }) {
                     <td>{p.rrp != null ? fmtMoney(Number(p.rrp), p.rrp_currency) : "—"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <span className={`dot ${dot}`} title={`${f}/${KEY_FIELDS.length} fields`} />
-                      <button className="unlink-btn" style={{ marginLeft: 8 }} onClick={() => setEditing(p)}>Edit</button>
+                      {canEdit ? (
+                        <button className="unlink-btn" style={{ marginLeft: 8 }} onClick={() => setEditing(p)}>Edit</button>
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -210,6 +212,13 @@ function EditModal({
     rrp_currency: product.rrp_currency ?? "EUR",
     magsafe: !!product.magsafe,
   });
+  // SKU is edited on its own, not with the spec form: it is the identity, the
+  // write is a different (atomic, cascading) operation, and it can be refused
+  // for colliding with an existing product.
+  const [sku, setSku] = useState(product.sku);
+  const [skuDraft, setSkuDraft] = useState(product.sku);
+  const [skuNote, setSkuNote] = useState<string | null>(null);
+  const [renaming, startRename] = useTransition();
   const [imgUrl, setImgUrl] = useState(product.image_url);
   const [lockTs, setLockTs] = useState(product.updated_at); // moves forward after any write so Save/upload don't self-conflict
   const [err, setErr] = useState<string | null>(null);
@@ -233,6 +242,21 @@ function EditModal({
       } else {
         setErr(res.error || "Image upload failed");
       }
+    });
+  };
+
+  const renameSku = () => {
+    setSkuNote(null);
+    setErr(null);
+    if (skuDraft.trim() === sku) return;
+    startRename(async () => {
+      const res = await renameProductSku(product.id, skuDraft);
+      if (res.ok) {
+        const moved = (res.product as { first_pass_updated?: number } | undefined)?.first_pass_updated ?? 0;
+        setSku(skuDraft.trim());
+        setSkuNote(`Saved. ${moved} channel mapping${moved === 1 ? "" : "s"} moved with it.`);
+        onPatch({ id: product.id, sku: skuDraft.trim() });
+      } else setErr(res.error || "Rename failed");
     });
   };
 
@@ -270,7 +294,7 @@ function EditModal({
         <div className="modal-head">
           <div>
             <h2>Edit spec</h2>
-            <span className="modal-sub"><code>{product.sku}</code> · {titleCase(product.brand?.display_name)} · id {product.id}</span>
+            <span className="modal-sub"><code>{sku}</code> · {titleCase(product.brand?.display_name)} · id {product.id}</span>
           </div>
           <button className="unlink-btn" onClick={onClose}>Close</button>
         </div>
@@ -288,6 +312,25 @@ function EditModal({
         </div>
 
         <div className="form-grid">
+          <Field label="SKU — product identity" wide>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={skuDraft} onChange={(e) => setSkuDraft(e.target.value)} disabled={renaming} />
+              <button
+                className="btn"
+                type="button"
+                disabled={renaming || skuDraft.trim() === sku || skuDraft.trim() === ""}
+                onClick={renameSku}
+              >
+                {renaming ? "…" : "Rename"}
+              </button>
+            </div>
+            <p className="field-note">
+              Saved separately from the rest of the form: the channel mappings that resolve through this
+              SKU are carried over in the same transaction, and a SKU already used by another product of
+              this brand is refused rather than merged.
+            </p>
+            {skuNote ? <p className="field-note" style={{ color: "var(--accent)" }}>{skuNote}</p> : null}
+          </Field>
           <Field label="Product name" wide><input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
           <Field label="EAN"><input value={form.ean} onChange={(e) => set("ean", e.target.value)} /></Field>
           <Field label="Capacity"><input value={form.capacity} onChange={(e) => set("capacity", e.target.value)} placeholder="20000 mAh" /></Field>

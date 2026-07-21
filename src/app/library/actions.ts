@@ -2,15 +2,22 @@
 
 import { getSupabase } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/scope";
+import { requireEditor } from "@/lib/scope";
 import { revalidatePath } from "next/cache";
 
 // Library is the ONE home for competitor specs (field-ownership contract). Editing
 // here writes `products`; Channel / INIU / Dashboard / First Pass all JOIN from it,
-// so one edit propagates everywhere. NOT editable: sku/sku_key/brand (identity —
-// changing them would break the mapping key) and image_url (owned by the
-// upload_images pipeline). Concurrency-safe via the updated_at optimistic lock;
-// every change is written to audit_events (who/before/after).
+// so one edit propagates everywhere. Concurrency-safe via the updated_at optimistic
+// lock; every change is written to audit_events (who/before/after).
+//
+// SKU is editable too, but NOT through this whitelist — it is the identity the
+// mapping key is derived from, and changing it has to carry the code→SKU memory in
+// `first_pass_observations` with it or every affected listing flips to
+// library_missing next cycle. That is the `rename_product_sku` SQL function, called
+// below, so both tables move in one transaction. `sku_key` is never written by hand:
+// the products_set_sku_key trigger derives it, so the normalisation rule has exactly
+// one implementation. `brand_id` stays fixed — a product changing brand is a
+// different product.
 
 const EDITABLE = [
   "name", "ean", "capacity", "wired_power", "wireless_power",
@@ -32,12 +39,30 @@ async function sessionEmail(): Promise<string | null> {
   }
 }
 
+/** Identity change: atomic in SQL because products + first_pass must move together. */
+export async function renameProductSku(id: number, newSku: string): Promise<Result> {
+  const denied = await requireEditor();
+  if (denied) return { ok: false, error: denied };
+  const sb = getSupabase();
+  const { data, error } = await sb.rpc("rename_product_sku", {
+    p_product_id: id,
+    p_new_sku: newSku,
+    p_actor: await sessionEmail(),
+  });
+  if (error) return { ok: false, error: error.message };
+  const res = data as { ok: boolean; error?: string; first_pass_updated?: number };
+  if (!res?.ok) return { ok: false, error: res?.error ?? "Could not rename" };
+  // the SKU string is displayed on, and matched through, every one of these
+  for (const p of ["/library", "/", "/iniu", "/channel", "/first-pass", "/reviews"]) revalidatePath(p);
+  return { ok: true, product: res as unknown as Record<string, unknown> };
+}
+
 export async function updateProduct(
   id: number,
   patch: ProductPatch,
   expectedUpdatedAt: string,
 ): Promise<Result> {
-  const denied = await requireAdmin();
+  const denied = await requireEditor();
   if (denied) return { ok: false, error: denied };
   const sb = getSupabase();
 
@@ -99,7 +124,7 @@ export async function uploadProductImage(
   expectedUpdatedAt: string,
   formData: FormData,
 ): Promise<ImgResult> {
-  const denied = await requireAdmin();
+  const denied = await requireEditor();
   if (denied) return { ok: false, error: denied };
 
   const file = formData.get("file");

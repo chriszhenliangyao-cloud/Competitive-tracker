@@ -1,3 +1,4 @@
+import { getScope } from "@/lib/scope";
 import { getSupabase } from "@/lib/supabase";
 import { catFilter } from "@/lib/category";
 import { getCategoryId } from "@/lib/category-server";
@@ -18,5 +19,5 @@ export default async function LibraryPage() {
       .limit(5000),
     catId,
   );
-  return <LibraryTable products={(data ?? []) as unknown as LibProduct[]} />;
+  return <LibraryTable products={(data ?? []) as unknown as LibProduct[]} canEdit={(await getScope()).canEdit} />;
 }
