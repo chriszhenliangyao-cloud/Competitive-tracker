@@ -45,25 +45,37 @@ export type ChargerDashboardData = {
   stats: { products: number; listings: number; retailers: number; unmapped: number };
 };
 
-// (retailer code | sku | ean) -> scraped image url, for products with no library image.
-async function getFirstPassImages(catId: number): Promise<Map<string, string>> {
+/** What the scrape saw, for listings with no library product behind them. */
+type RawSpec = { image: string | null; power: string | null; ports: string | null };
+
+// (retailer code | sku | ean) -> the scraped image/power/ports. Most charger
+// listings are unmapped, so without this fallback the dashboard would show a
+// blank tile and no wattage — on a board whose whole axis IS wattage.
+async function getFirstPassSpecs(catId: number): Promise<Map<string, RawSpec>> {
   const sb = getSupabase();
   const { data } = await catFilter(
     sb
       .from("first_pass_observations")
-      .select("sku, ean, retailer_product_code, image_url")
-      .not("image_url", "is", null)
+      .select("sku, ean, retailer_product_code, image_url, power, usb_ports")
       .limit(20000),
     catId,
   );
-  const idx = new Map<string, string>();
+  const idx = new Map<string, RawSpec>();
   for (const o of (data ?? []) as unknown as {
-    sku: string | null; ean: string | null; retailer_product_code: string | null; image_url: string | null;
+    sku: string | null; ean: string | null; retailer_product_code: string | null;
+    image_url: string | null; power: string | null; usb_ports: string | null;
   }[]) {
-    if (!o.image_url) continue;
+    if (!o.image_url && !o.power && !o.usb_ports) continue;
     for (const k of [o.retailer_product_code, o.sku, o.ean]) {
       const kk = (k ?? "").trim().toUpperCase();
-      if (kk && !idx.has(kk)) idx.set(kk, o.image_url);
+      if (!kk) continue;
+      const cur = idx.get(kk);
+      // first non-null per key wins, field by field
+      idx.set(kk, {
+        image: cur?.image ?? o.image_url ?? null,
+        power: cur?.power ?? o.power ?? null,
+        ports: cur?.ports ?? o.usb_ports ?? null,
+      });
     }
   }
   return idx;
@@ -76,7 +88,7 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
   // Products without their own image borrow the scraped first-pass image, the
   // same fallback the powerbank Channel view uses — otherwise anything not in
   // the library renders as a blank tile.
-  const [{ data }, fpImg] = await Promise.all([
+  const [{ data }, fpSpec] = await Promise.all([
     catFilter(
       sb
         .from("listings")
@@ -90,7 +102,7 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
         .limit(20000),
       catId,
     ),
-    getFirstPassImages(catId),
+    getFirstPassSpecs(catId),
   ]);
 
   type L = {
@@ -138,6 +150,15 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
       }
     }
 
+    // The library wins whenever the listing is mapped; the scrape only fills gaps.
+    const raw =
+      fpSpec.get((l.retailer_product_code ?? "").trim().toUpperCase()) ??
+      fpSpec.get((l.raw_sku ?? "").trim().toUpperCase()) ??
+      fpSpec.get((l.raw_ean ?? "").trim().toUpperCase());
+    const image = l.product?.image_url ?? raw?.image ?? null;
+    const watt = l.product?.wired_power ?? raw?.power ?? null;
+    const ports = l.product?.usb_ports ?? raw?.ports ?? null;
+
     let p = byKey.get(key);
     if (!p) {
       p = {
@@ -145,28 +166,19 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
         name,
         brand: l.brand?.display_name ?? "—",
         sku: l.product?.sku ?? l.raw_sku ?? null,
-        watt: l.product?.wired_power ?? null,
-        ports: l.product?.usb_ports ?? null,
-        image:
-          l.product?.image_url ??
-          fpImg.get((l.retailer_product_code ?? "").trim().toUpperCase()) ??
-          fpImg.get((l.raw_sku ?? "").trim().toUpperCase()) ??
-          fpImg.get((l.raw_ean ?? "").trim().toUpperCase()) ??
-          null,
+        watt,
+        ports,
+        image,
         mapped: !!l.product?.id,
         rows: [],
         dates: [],
       };
       byKey.set(key, p);
     }
-    if (!p.image) {
-      p.image =
-        l.product?.image_url ??
-        fpImg.get((l.retailer_product_code ?? "").trim().toUpperCase()) ??
-        fpImg.get((l.raw_sku ?? "").trim().toUpperCase()) ??
-        fpImg.get((l.raw_ean ?? "").trim().toUpperCase()) ??
-        null;
-    }
+    // one product can span retailers; take the first retailer that knows a field
+    if (!p.image) p.image = image;
+    if (!p.watt) p.watt = watt;
+    if (!p.ports) p.ports = ports;
     p.rows.push({
       retailer: l.retailer?.display_name ?? "—",
       country,
