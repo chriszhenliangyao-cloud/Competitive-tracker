@@ -239,6 +239,8 @@ export async function GET(request: Request) {
       scope.countries === null ? "All countries" : scope.countries.join(", "));
   }
 
+  // Empty set = every product, matching the board's "All products".
+  const picked = new Set((params.get("products") || "").split(",").map((x) => x.trim()).filter(Boolean));
   const { products, compByIniu, ownByIniu, scopeLabel } = await getDashboardData();
 
   const inC = (r: PriceRow) => !country || r.country === country;
@@ -246,6 +248,7 @@ export async function GET(request: Request) {
   let shown = 0;
 
   for (const p of products) {
+    if (picked.size > 0 && !picked.has(String(p.id))) continue;
     const own = (ownByIniu[p.id] ?? []).filter(inC);
     const comps = (compByIniu[p.id] ?? []).filter((c: Competitor) => c.priceRows.some(inC));
     if (own.length === 0 && comps.length === 0) continue;
@@ -280,7 +283,9 @@ export async function GET(request: Request) {
     sub: "INIU vs mapped competitors — per-retailer price history (EUR). INIU's own price is the first row of each product.",
     meta:
       `<div>Exported <b>${esc(now.toISOString().slice(0, 16).replace("T", " "))} UTC</b></div>` +
-      `<div>Scope: <b>${esc(scopeTxt)}</b></div><div><b>${shown}</b> products</div>`,
+      `<div>Scope: <b>${esc(scopeTxt)}</b></div>` +
+      // say plainly when this is a subset, so an emailed file isn't read as the full catalogue
+      `<div><b>${shown}</b> products${picked.size ? ` <span class="muted">(selected of ${products.length})</span>` : ""}</div>`,
     sections,
     footer:
       "Snapshot exported from the INIU Competitive Tracker. Prices normalised to EUR; each column is an ISO week (the latest scrape in that week). Product images load from the hosted image store, so keep a connection to see them.",

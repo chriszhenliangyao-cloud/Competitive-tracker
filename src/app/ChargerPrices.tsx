@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Thumb from "@/components/Thumb";
+import MultiSelect from "@/components/MultiSelect";
 import { COUNTRY_NAMES, fmtEUR, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
 import { CHARGER_WEEK_COLS } from "@/lib/charger-tiers";
@@ -19,8 +20,6 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
   const [segments, setSegments] = useState<string[]>([]);
   const { sections, countries, stats } = data;
 
-  const toggleSegment = (key: string) =>
-    setSegments((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
 
   // Week columns are computed ONCE over every date in the dataset, not per
   // product: a product only scraped in some weeks would otherwise get its own
@@ -84,36 +83,13 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
       </section>
 
       <div className="filter-bar">
-        <div className="filter-group">
-          <label>Segments</label>
-          {/* <details> gives a real dropdown without click-outside handling. */}
-          <details className="multi">
-            <summary>
-              {segments.length === 0
-                ? "All segments"
-                : segments.length === 1
-                  ? (sections.find((s) => s.key === segments[0])?.label ?? "1 selected")
-                  : `${segments.length} selected`}
-            </summary>
-            <div className="multi-panel">
-              <button type="button" className="multi-clear" onClick={() => setSegments([])}>
-                Select all
-              </button>
-              {sections.map((s) => (
-                <label key={s.key} className="multi-row">
-                  <input
-                    type="checkbox"
-                    checked={segments.includes(s.key)}
-                    onChange={() => toggleSegment(s.key)}
-                  />
-                  <span>
-                    {s.label} <span className="muted">({s.products.length})</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </details>
-        </div>
+        <MultiSelect
+          label="Segments"
+          allLabel="All segments"
+          options={sections.map((x) => ({ value: x.key, label: x.label, hint: String(x.products.length) }))}
+          selected={segments}
+          onChange={setSegments}
+        />
         <div className="filter-group">
           <label>Country</label>
           <select value={country} onChange={(e) => setCountry(e.target.value)}>

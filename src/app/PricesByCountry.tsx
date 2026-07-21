@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Thumb from "@/components/Thumb";
+import MultiSelect from "@/components/MultiSelect";
 import Sparkline from "@/components/Sparkline";
 import { COUNTRY_NAMES, fmtEUR, rrpParts, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
@@ -19,7 +20,9 @@ export default function PricesByCountry({
   ownByIniu: Record<number, PriceRow[]>;
 }) {
   const [country, setCountry] = useState("");
-  const [product, setProduct] = useState(""); // "" = show all
+  // Multi-select: empty means every product, so the board opens complete. Lets
+  // you pin a handful of INIU models side by side instead of one at a time.
+  const [selected, setSelected] = useState<string[]>([]);
 
   const countries = useMemo(() => {
     const s = new Set<string>();
@@ -33,11 +36,11 @@ export default function PricesByCountry({
   const visible = useMemo(
     () =>
       products.filter((p) => {
-        if (product && String(p.id) !== product) return false;
+        if (selected.length > 0 && !selected.includes(String(p.id))) return false;
         return inCountry(ownByIniu[p.id] ?? []) || (compByIniu[p.id] ?? []).some((c) => inCountry(c.priceRows));
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [products, product, country, compByIniu, ownByIniu],
+    [products, selected, country, compByIniu, ownByIniu],
   );
 
   return (
@@ -48,8 +51,20 @@ export default function PricesByCountry({
           <p>INIU vs mapped competitors — per-retailer price history (EUR). INIU&apos;s own price is the first row.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Static HTML snapshot of exactly what's on screen (respects the country filter). */}
-          <a className="btn" href={`/api/export${country ? `?country=${encodeURIComponent(country)}` : ""}`} download>
+          {/* Static HTML snapshot of exactly what's on screen (both filters carry over). */}
+          <a
+            className="btn"
+            href={`/api/export${
+              country || selected.length
+                ? "?" +
+                  new URLSearchParams({
+                    ...(country ? { country } : {}),
+                    ...(selected.length ? { products: selected.join(",") } : {}),
+                  }).toString()
+                : ""
+            }`}
+            download
+          >
             ↓ Export HTML
           </a>
           <div className="pill">{visible.length} products</div>
@@ -68,17 +83,13 @@ export default function PricesByCountry({
             ))}
           </select>
         </div>
-        <div className="filter-group">
-          <label>Product</label>
-          <select value={product} onChange={(e) => setProduct(e.target.value)}>
-            <option value="">Show all</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <MultiSelect
+          label="Products"
+          allLabel="All products"
+          options={products.map((p) => ({ value: String(p.id), label: p.name }))}
+          selected={selected}
+          onChange={setSelected}
+        />
       </div>
 
       {visible.length === 0 ? (
