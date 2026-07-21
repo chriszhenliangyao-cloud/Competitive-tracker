@@ -1,0 +1,141 @@
+import { getSupabase } from "@/lib/supabase";
+import { catFilter } from "@/lib/category";
+import { getCategoryId } from "@/lib/category-server";
+import { getScope, allowsCountry } from "@/lib/scope";
+import { effectivePrice, toEUR } from "@/lib/format";
+import { CHARGER_TIERS, tierOf, type TierKey } from "@/lib/charger-tiers";
+import type { PriceRow } from "@/app/iniu/IniuTable";
+
+// Dashboard data for the charger line.
+//
+// The powerbank dashboard hangs everything off INIU products (INIU's own price
+// first, mapped competitors under it). There are no INIU chargers, so that
+// backbone doesn't exist here — instead the market is grouped by segment
+// (wall / car / desktop / cable, split by wattage), which is how the category is
+// actually merchandised. Same table shape as the powerbank view: one row per
+// product, its retailers underneath, prices per ISO week in EUR.
+//
+// Products come from LISTINGS rather than the library, because 73% of charger
+// listings are still unmapped (new_listing) — reading the library only would
+// hide most of what's actually on shelf.
+
+export type ChargerProduct = {
+  key: string;
+  name: string;
+  brand: string;
+  sku: string | null;
+  watt: string | null;
+  image: string | null;
+  mapped: boolean;
+  rows: PriceRow[];
+  dates: string[];
+};
+export type ChargerSection = { key: TierKey; label: string; sub: string; products: ChargerProduct[] };
+export type ChargerDashboardData = {
+  sections: ChargerSection[];
+  countries: string[];
+  stats: { products: number; listings: number; retailers: number; unmapped: number };
+};
+
+export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
+  const sb = getSupabase();
+  const catId = await getCategoryId();
+
+  const { data } = await catFilter(
+    sb
+      .from("listings")
+      .select(
+        `id, raw_name, raw_sku, status, retailer_product_code,
+         brand:brands(display_name),
+         retailer:retailers(display_name, country),
+         product:products(id, sku, name, wired_power, image_url),
+         snapshots:price_snapshots(scraped_date, price, promo_price, currency)`,
+      )
+      .limit(20000),
+    catId,
+  );
+
+  type L = {
+    id: number;
+    raw_name: string | null;
+    raw_sku: string | null;
+    status: string | null;
+    brand: { display_name: string } | null;
+    retailer: { display_name: string; country: string | null } | null;
+    product: { id: number; sku: string; name: string; wired_power: string | null; image_url: string | null } | null;
+    snapshots: { scraped_date: string | null; price: number | null; promo_price: number | null; currency: string | null }[];
+  };
+
+  const scope = await getScope();
+  const countries = new Set<string>();
+  // group by the mapped product when known, else by the listing's own name, so
+  // the same product across retailers collapses into one row wherever possible
+  const byKey = new Map<string, ChargerProduct>();
+  let listingCount = 0;
+  let unmapped = 0;
+
+  for (const l of (data ?? []) as unknown as L[]) {
+    const country = l.retailer?.country ?? null;
+    if (scope.countries !== null && !allowsCountry(scope, country)) continue;
+    if (country) countries.add(country);
+
+    const name = l.product?.name || l.raw_name || "—";
+    const key = l.product?.id ? `p${l.product.id}` : `n:${(l.raw_name ?? "").toLowerCase().trim()}`;
+
+    const byDate: Record<string, number | null> = {};
+    for (const s of l.snapshots ?? []) {
+      if (!s.scraped_date) continue;
+      byDate[s.scraped_date] = toEUR(effectivePrice(s.price, s.promo_price), s.currency);
+    }
+
+    let p = byKey.get(key);
+    if (!p) {
+      p = {
+        key,
+        name,
+        brand: l.brand?.display_name ?? "—",
+        sku: l.product?.sku ?? l.raw_sku ?? null,
+        watt: l.product?.wired_power ?? null,
+        image: l.product?.image_url ?? null,
+        mapped: !!l.product?.id,
+        rows: [],
+        dates: [],
+      };
+      byKey.set(key, p);
+    }
+    if (!p.image && l.product?.image_url) p.image = l.product.image_url;
+    p.rows.push({
+      retailer: l.retailer?.display_name ?? "—",
+      country,
+      code: null,
+      byDate,
+    });
+    listingCount++;
+    if (!l.product?.id) unmapped++;
+  }
+
+  // bucket products into the 7 segments
+  const buckets = new Map<TierKey, ChargerProduct[]>();
+  const retailers = new Set<string>();
+  for (const p of byKey.values()) {
+    p.dates = [...new Set(p.rows.flatMap((r) => Object.keys(r.byDate)))].sort();
+    p.rows.forEach((r) => retailers.add(r.retailer));
+    const t = tierOf(p.name, p.watt);
+    const arr = buckets.get(t) ?? [];
+    arr.push(p);
+    buckets.set(t, arr);
+  }
+
+  const sections: ChargerSection[] = CHARGER_TIERS.map((t) => ({
+    key: t.key,
+    label: t.label,
+    sub: t.sub,
+    products: (buckets.get(t.key) ?? []).sort((a, b) => a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name)),
+  }));
+
+  return {
+    sections,
+    countries: [...countries].sort(),
+    stats: { products: byKey.size, listings: listingCount, retailers: retailers.size, unmapped },
+  };
+}
