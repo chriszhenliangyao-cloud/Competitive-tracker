@@ -725,7 +725,7 @@ tr.row-hidden td .sub {
   background: var(--surface);
   box-shadow: 0 8px 24px rgba(19, 32, 30, 0.12);
 }
-.multi-row {
+.filter-group label.multi-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -739,10 +739,10 @@ tr.row-hidden td .sub {
   font-weight: 400;
   color: var(--foreground);
 }
-.multi-row:hover {
+.filter-group label.multi-row:hover {
   background: var(--subtle);
 }
-.multi-row input {
+.filter-group label.multi-row input {
   accent-color: var(--accent);
 }
 .multi-clear {
