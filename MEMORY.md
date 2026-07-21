@@ -408,3 +408,71 @@ its last local artefacts are from 2026-05-14.
 - 6 competitor pairs share a Storage image = duplicate SKU/EAN in the source library (worth merging).
 - The global audit confirmed the DB faithfully mirrors local; "stale" pairs (e.g. xkom/ugreen last_seen
   2026-05-20) are scraping-coverage gaps, not missing data (xkom search returns 0 ugreen now).
+
+## Charger line goes live end-to-end (2026-07-21)
+The charger line now runs the same Model-B loop as powerbanks: local scrape raw →
+`raw_scrape_rows` → `map_cycle` → dashboard. What changed and what it cost:
+
+- **One runner drives both lines.** The charger scrapers live in a SEPARATE tree
+  (`插头/channel/`) with its own 15 retailer adapters and brand list, and BOTH trees
+  name their packages `config`/`scrapers`, so only one can sit on `sys.path`.
+  `run_scrape_raw.py` therefore reads `--category` from argv BEFORE importing
+  (`_early_category()` / `CATEGORY_SCRAPER_DIR`) and puts the matching tree on the
+  path; `scrapers/orchestrate.py` (the retry/rebuild harness, category-neutral and
+  present only in the powerbank tree) is loaded by file path. Anti-bot backends are
+  read with `getattr` — a tree without them just runs stock Playwright. The adapter
+  interface already matched: `RETAILER_REGISTRY[r](base_dir=…, target_brand=…).run(page)`.
+  `base_dir` must be the SELECTED tree (brand libraries resolve against it).
+- **fnac and xkom cannot be scraped for chargers yet.** fnac needs CloakBrowser
+  (DataDome), xkom needs the real-Chrome CDP backend (Cloudflare); both backends exist
+  only in the powerbank tree's `browser.py`. Their targets are enabled in
+  `brand_retailer_targets` (correct long-term list) but must be excluded per-run with
+  `--retailer` until the backends are ported, else they burn hours returning 0.
+- **pccomponentes has no charger adapter at all** — `get_targets` silently drops it
+  (`rk not in RETAILER_REGISTRY`). Its charger target is enabled but will never run.
+- **Power now survives the pipeline.** `raw_scrape_rows` gained `power`/`usb_ports`;
+  `map_cycle` records them on the first_pass registry (the documented raw fallback for
+  unmapped codes) using `coalesce(excluded, existing)` so a run that carries no power —
+  every powerbank run — can never blank a stored value. The dashboard prefers the
+  library and falls back to first_pass. Before: 118/452 charger listings had a wattage
+  (only the mapped ones). After backfilling the three history cycles: 435/452.
+  ⚠️ The first charger scrape today still uploaded 0 power because the process had been
+  started before the patch (old module in memory) — the coalesce guard is why nothing
+  was lost. Verified on a 6-row rerun, then 477/511 on the full run.
+- **2026-05-14 was a third history cycle nobody had imported.** It lives under
+  `channel_first_pass/<retailer>/<brand>/*_plug_first_pass_*.xlsx` with snake_case
+  headers, unlike the mapped files' Title Case; `import_charger_history.py` now reads
+  both layouts and takes `--date`. Replaying history must go OLDEST FIRST — replaying a
+  single old date rewinds `listings.last_seen` for codes seen later.
+- **Full run (11 retailers, 55 pairs, ~2h56m, single attempt, 0 restarts)**: 511 rows →
+  mapped 114, new_listing 397, delisted 32. **0 missed maps** (no new_listing had a
+  raw_sku that would have matched the library), 511/511 carried a retailer code, 477
+  carried power. Delists spread thin across 16 retailer×brand pairs, max 10, all last
+  seen 5–6 weeks ago = real churn. Circuit breaker held nothing back and reported 4
+  zero-scrape pairs as safe. Charger listings 452 → 600. Powerbank verified untouched
+  (1041 listings / 547 products) before and after every step.
+- **Orange returns 0 for all 5 charger brands** and elcorteingles/cellularline +
+  /ugreen timed out on `page.goto` — adapter work, not pipeline bugs.
+
+## Charger dashboard shape (2026-07-21)
+- **Tiers** (`lib/charger-tiers.ts`, classified from the product NAME): wall on a full
+  power ladder `<45 / 45–65 / 65–100 / 100–150 / >150W` plus a `Wall · W unknown`
+  section, then car, desktop (≤/>200W), wireless, cable (≤/>150W). The ladder is
+  wall-only deliberately — car is 19/32 under 45W and wireless 49/55, so giving every
+  form factor five bands would produce ~20 empty sections.
+- **Wireless is its own tier and is decided FIRST**, before the cable rule. Two rows
+  were being swallowed by cable because Spanish "carga" and French "recharge" are not in
+  `CHARGER_WORD`: "Base de carga … Con cable" and "Station de recharge aimantée … +
+  câble". Cable is now 3 listings, all genuinely standalone cables.
+- **`usb_ports` is NOT used to detect wireless** — its remaining "+Wireless" values are
+  all plain wall chargers ("Chargeur Belkin Secteur Usb-C 100W"), i.e. the spec parser
+  picking the word off the page. Spanish "magnético" is also excluded: here it describes
+  a magnetic retractable CABLE on car chargers. Verified against all 452 listings: 55
+  wireless, no false positives, no misses, every band's actual wattage matches its label.
+- **Week columns are computed once over the whole dataset**, not per product, or rows
+  with different scrape coverage don't line up; a missing week shows "—" and the up/down
+  colour compares against the most recent EARLIER week that has a price.
+- **RRP is shown in EUR with the original underneath** on Dashboard / INIU / HTML export
+  (`rrpParts` in `lib/format.ts`). Every price column was already EUR, so a PLN RRP was
+  the one figure you couldn't read across a row — 203 of 529 RRPs are non-EUR. Library
+  and First Pass keep native on purpose (catalogue of record / actual retailer price).
