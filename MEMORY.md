@@ -342,6 +342,40 @@ its last local artefacts are from 2026-05-14.
   P4 (needs a decision) = does INIU sell chargers? If so it needs `iniu_products` rows, an own-price
   lane and competitive links.
 
+## Charger line: category switcher + library import — P2/P3 partly done (2026-07-21)
+- **Category switcher (UI)**: sidebar tabs flip the whole app between Power Banks and Chargers.
+  The choice is a cookie (`tracker_category`), resolved per request by `getCategoryId()` in
+  `lib/category-server.ts` and passed into `catFilter(q, catId)`. `catFilter`'s second argument is
+  REQUIRED, so the compiler guarantees no page can silently fall back to a hard-coded category.
+  `lib/category.ts` must stay client-safe (constants/types only) — it's imported by the client tab
+  component, and adding `next/headers` there breaks the build ("only available in Server Components").
+- **Identity policy for chargers = option C** (Chris's call), mirroring `插头/scrapers/sku_rules.py`:
+  real brands (anker/baseus/belkin/ugreen/cellularline) need a manufacturer SKU; house brands
+  (isy/silvermonkey/xline/adeqwat/essentielb/forcepower) never expose one, so their EAN — or the
+  brand's own code for silvermonkey, which has no EAN — IS the identity. EANs are deliberately NOT
+  used as identity for real brands: an EAN is per-variant (each colour/bundle) while a SKU is
+  per-model, so that would fragment one model into several "products".
+- **Imported** via `cloud/pipeline/import_charger_library.py` (dry-run by default): 473 library rows
+  → **218 products** in category 2 (belkin 52, essentielb 38, adeqwat 35, silvermonkey 26, ugreen 18,
+  xline 17, cellularline 11, isy 10, anker 10, baseus 1); **251 skipped for having no identity, not
+  invented**. Verified powerbank untouched (547 products / 1041 listings before and after).
+- ⚠️ **The charger libraries are SKU-poor**: only 149/473 rows carry a SKU — baseus 1/85 and
+  cellularline 11/105 are real brands that should have them, so this looks like the 2026-05 first-pass
+  scrape failing to extract SKUs rather than the products lacking them. Those two brands will look
+  nearly empty until a fresh scrape improves extraction. Re-run the import after any re-scrape; it
+  upserts on (category_id, brand_id, sku_key).
+- **NEW: `products.sku_key` is now computed by a DB trigger** (`products_set_sku_key`) using the same
+  `fp_norm_sku` map_cycle matches on. It was NOT NULL with nothing server-side filling it — the
+  powerbank rows only had it because the old push script computed it client-side, so every new writer
+  had to reimplement the rule identically or mapping would silently break (the charger import failed
+  with 23502 on the first attempt for exactly this reason). Verified the trigger's formula reproduces
+  all 547 existing powerbank keys with 0 differences. **Callers must no longer set sku_key.**
+- **71 charger scrape targets** seeded in `brand_retailer_targets` (house brands whitelisted to their
+  single retailer, real brands across all 13), all `is_enabled=false` so nothing scrapes until a
+  deliberate smoke test. Powerbank's 53 targets untouched.
+- **Next**: enable 1–2 charger targets → smoke-test `run_scrape_raw.py --category charger` → check
+  SKU extraction rate → enable the rest. Then charger-specific views (matrix axis = power W × price).
+
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
   351 distinct listings — Model A `push_to_supabase` used a date-stamped `source_file` in the dedupe
