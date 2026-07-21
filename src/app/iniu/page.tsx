@@ -2,7 +2,7 @@ import { getSupabase } from "@/lib/supabase";
 import { catFilter } from "@/lib/category";
 import { getCategoryId } from "@/lib/category-server";
 import { getChannelRows } from "@/lib/data";
-import { effectivePrice, toEUR } from "@/lib/format";
+import { effectivePrice, toDisplay } from "@/lib/format";
 import IniuTable, { type IniuProduct, type Competitor, type PriceRow } from "./IniuTable";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +86,7 @@ export default async function IniuPage() {
       s.price != null ? Number(s.price) : null,
       s.promo_price != null ? Number(s.promo_price) : null,
     );
-    row.byDate[s.scraped_date] = toEUR(eff, s.currency);
+    row.byDate[s.scraped_date] = toDisplay(eff, s.currency, s.country);
   }
 
   // channel index: competitor SKU (upper) -> retailer price rows + union of dates
@@ -96,15 +96,16 @@ export default async function IniuPage() {
     const sku = r.product?.sku;
     if (!sku) continue;
     const k = sku.toUpperCase();
+    const country = r.retailer?.country ?? null;
     const byDate: Record<string, number | null> = {};
     for (const s of r.snapshots) {
       if (!s.scraped_date) continue;
-      byDate[s.scraped_date] = toEUR(effectivePrice(s.price, s.promo_price), s.currency);
+      byDate[s.scraped_date] = toDisplay(effectivePrice(s.price, s.promo_price), s.currency, country);
     }
     if (!chRows.has(k)) chRows.set(k, []);
     chRows.get(k)!.push({
       retailer: r.retailer?.display_name ?? "—",
-      country: r.retailer?.country ?? null,
+      country,
       code: r.retailer_product_code,
       byDate,
     });

@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
 import MultiSelect from "@/components/MultiSelect";
 import { updateChargerPower } from "./charger-power-actions";
-import { COUNTRY_NAMES, fmtEUR, titleCase } from "@/lib/format";
+import { COUNTRY_NAMES, displayCurrency, fmtPrice, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
 import { CHARGER_WEEK_COLS } from "@/lib/charger-tiers";
 import type { ChargerDashboardData, ChargerOffer, ChargerProduct, ChargerSection } from "@/lib/dashboard-charger";
@@ -51,8 +51,9 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
         <div>
           <h1>Charger Market</h1>
           <p>
-            Competitor chargers by segment and power band — per-retailer price history (EUR).
-            No INIU chargers yet, so this is the market map rather than a head-to-head.
+            Competitor chargers by segment and power band — per-retailer price history.{" "}
+            <strong>Poland in PLN</strong>, every other market in EUR. No INIU chargers yet, so this
+            is the market map rather than a head-to-head.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -234,7 +235,7 @@ function ProductRows({
             if (v != null && prev != null && v !== prev) cls = v > prev ? "chg-up" : "chg-down";
             return (
               <td key={w.key} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                {v != null ? <span className={cls}>{fmtEUR(v)}</span> : <span className="muted">—</span>}
+                {v != null ? <span className={cls}>{fmtPrice(v, displayCurrency(r.country))}</span> : <span className="muted">—</span>}
               </td>
             );
           })}

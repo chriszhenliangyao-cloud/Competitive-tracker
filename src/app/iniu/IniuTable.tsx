@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
 import Sparkline from "@/components/Sparkline";
-import { COUNTRY_NAMES, fmtEUR, rrpParts, titleCase } from "@/lib/format";
+import { COUNTRY_NAMES, displayCurrency, fmtPrice, rrpParts, titleCase } from "@/lib/format";
 import { hideCompetitor, unhideCompetitor } from "./actions";
 
 export type PriceRow = {
@@ -503,7 +503,7 @@ function PriceTable({
                     return (
                       <div key={d} style={{ textAlign: "right", minWidth: 52 }}>
                         <div style={{ fontSize: 10, color: "#9aa6ae" }}>{d.slice(5)}</div>
-                        <div className={cls}>{v != null ? fmtEUR(v) : "—"}</div>
+                        <div className={cls}>{v != null ? fmtPrice(v, displayCurrency(r.country)) : "—"}</div>
                       </div>
                     );
                   })}
@@ -578,7 +578,7 @@ function OwnPriceTable({
                   return (
                     <div key={d} style={{ textAlign: "right", minWidth: 52 }}>
                       <div style={{ fontSize: 10, color: "#9aa6ae" }}>{d.slice(5)}</div>
-                      <div className={cls}>{v != null ? fmtEUR(v) : "—"}</div>
+                      <div className={cls}>{v != null ? fmtPrice(v, displayCurrency(r.country)) : "—"}</div>
                     </div>
                   );
                 })}

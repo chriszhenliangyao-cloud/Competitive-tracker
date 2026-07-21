@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ChannelRow } from "@/lib/data";
-import { COUNTRY_NAMES, effectivePrice, fmtEUR, titleCase, toEUR } from "@/lib/format";
+import { COUNTRY_NAMES, displayCurrency, effectivePrice, fmtPrice, titleCase, toDisplay } from "@/lib/format";
 import Thumb from "@/components/Thumb";
 import PriceChart from "@/components/PriceChart";
 
@@ -75,12 +75,14 @@ function buildProducts(rows: ChannelRow[]): Product[] {
       map.set(key, p);
     }
     if (!p.image && r.image) p.image = r.image;
+    // in the currency this retailer's market is read in — PLN for Poland, else EUR
+    const rowCountry = r.retailer?.country ?? null;
     const byDate = new Map<string, { eur: number | null; promo: boolean }>();
     for (const s of r.snapshots) {
       if (!s.scraped_date) continue;
       const eff = effectivePrice(s.price, s.promo_price);
       byDate.set(s.scraped_date, {
-        eur: toEUR(eff, s.currency),
+        eur: toDisplay(eff, s.currency, rowCountry),
         promo: s.promo_price != null && s.price != null && s.promo_price < s.price,
       });
     }
@@ -354,7 +356,7 @@ function Card({
                   if (v != null) prev = v;
                   return (
                     <td key={d} className={cls2}>
-                      {v != null ? fmtEUR(v) : "—"}
+                      {v != null ? fmtPrice(v, displayCurrency(l.country)) : "—"}
                     </td>
                   );
                 })}
@@ -442,7 +444,7 @@ function Detail({ product, onBack }: { product: Product; onBack: () => void }) {
                     const cell = l.byDate.get(d);
                     return (
                       <td key={d} className={cell?.promo ? "promo" : ""}>
-                        {cell?.eur != null ? fmtEUR(cell.eur) : "—"}
+                        {cell?.eur != null ? fmtPrice(cell.eur, displayCurrency(l.country)) : "—"}
                       </td>
                     );
                   })}

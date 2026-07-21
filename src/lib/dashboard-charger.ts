@@ -2,7 +2,7 @@ import { getSupabase } from "@/lib/supabase";
 import { catFilter } from "@/lib/category";
 import { getCategoryId } from "@/lib/category-server";
 import { getScope, allowsCountry } from "@/lib/scope";
-import { effectivePrice, toEUR } from "@/lib/format";
+import { effectivePrice, toDisplay } from "@/lib/format";
 import { CHARGER_TIERS, tierOf, type TierKey } from "@/lib/charger-tiers";
 import type { PriceRow } from "@/app/iniu/IniuTable";
 
@@ -148,7 +148,7 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
     let onPromo = false;
     for (const s of l.snapshots ?? []) {
       if (!s.scraped_date) continue;
-      byDate[s.scraped_date] = toEUR(effectivePrice(s.price, s.promo_price), s.currency);
+      byDate[s.scraped_date] = toDisplay(effectivePrice(s.price, s.promo_price), s.currency, country);
       if (s.scraped_date >= latest) {
         latest = s.scraped_date;
         inStock = s.in_stock;

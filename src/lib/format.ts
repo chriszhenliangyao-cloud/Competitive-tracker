@@ -39,6 +39,54 @@ export function fmtMoney(value: number | null | undefined, currency: string | nu
   return `${n} ${cur}`;
 }
 
+// --- Per-country display currency ------------------------------------------
+// Everything used to be normalised to EUR so any two rows could be compared.
+// Poland is shown in PLN instead: the Polish team quotes, negotiates and reports
+// in złoty, so a EUR figure there is one they have to convert back before it
+// means anything. Every other market stays EUR.
+//
+// Consequence, on purpose: a table containing both PL and non-PL rows is no
+// longer directly comparable down the column. That is the trade — the price is
+// read against its own market. Anything that AGGREGATES across countries (the
+// Roadmap's average own-channel price) must therefore stay in EUR; mixing
+// currencies into one mean would produce a number that means nothing.
+
+export type DisplayCurrency = "EUR" | "PLN";
+
+/** ISO-2 markets that are shown in their own currency rather than EUR. */
+const NATIVE_CURRENCY_COUNTRIES: Record<string, DisplayCurrency> = { PL: "PLN" };
+
+export function displayCurrency(country: string | null | undefined): DisplayCurrency {
+  return NATIVE_CURRENCY_COUNTRIES[(country ?? "").toUpperCase()] ?? "EUR";
+}
+
+/** Convert between currencies through the EUR pivot in FX_TO_EUR. */
+export function toCurrency(
+  value: number | null | undefined,
+  from: string | null | undefined,
+  to: DisplayCurrency,
+): number | null {
+  const eur = toEUR(value, from);
+  if (eur == null) return null;
+  if (to === "EUR") return eur;
+  const rate = FX_TO_EUR[to];
+  return rate ? eur / rate : null;
+}
+
+/** Price in the currency its market is read in. */
+export function toDisplay(
+  value: number | null | undefined,
+  from: string | null | undefined,
+  country: string | null | undefined,
+): number | null {
+  return toCurrency(value, from, displayCurrency(country));
+}
+
+/** Format a figure already converted to `currency`. */
+export function fmtPrice(value: number | null | undefined, currency: DisplayCurrency): string {
+  return fmtMoney(value, currency);
+}
+
 export function fmtEUR(value: number | null | undefined): string {
   if (value == null) return "—";
   return `€${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

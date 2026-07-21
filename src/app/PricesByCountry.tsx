@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Thumb from "@/components/Thumb";
 import MultiSelect from "@/components/MultiSelect";
 import Sparkline from "@/components/Sparkline";
-import { COUNTRY_NAMES, fmtEUR, rrpParts, titleCase } from "@/lib/format";
+import { COUNTRY_NAMES, displayCurrency, fmtPrice, rrpParts, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
 import type { Competitor, PriceRow } from "./iniu/IniuTable";
 
@@ -48,7 +48,7 @@ export default function PricesByCountry({
       <header className="page-head">
         <div>
           <h1>Prices by Country</h1>
-          <p>INIU vs mapped competitors — per-retailer price history (EUR). INIU&apos;s own price is the first row.</p>
+          <p>INIU vs mapped competitors — per-retailer price history. <strong>Poland in PLN</strong>, every other market in EUR. INIU&apos;s own price is the first row.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* Static HTML snapshot of exactly what's on screen (both filters carry over). */}
@@ -255,7 +255,7 @@ function Group({
                 return (
                   <div key={w.key} title={w.dates.join(", ")} style={{ textAlign: "right", minWidth: 52 }}>
                     <div style={{ fontSize: 10, color: "#9aa6ae" }}>{w.label}</div>
-                    <div className={cls}>{v != null ? fmtEUR(v) : "—"}</div>
+                    <div className={cls}>{v != null ? fmtPrice(v, displayCurrency(r.country)) : "—"}</div>
                   </div>
                 );
               })}

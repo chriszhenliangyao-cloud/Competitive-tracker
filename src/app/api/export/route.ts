@@ -3,7 +3,7 @@ import { getChargerDashboardData, type ChargerOffer } from "@/lib/dashboard-char
 import { getCategoryKey } from "@/lib/category-server";
 import { CHARGER_WEEK_COLS, TIER_LABEL, type TierKey } from "@/lib/charger-tiers";
 import { getScope } from "@/lib/scope";
-import { COUNTRY_NAMES, fmtEUR, rrpParts, titleCase } from "@/lib/format";
+import { COUNTRY_NAMES, displayCurrency, fmtPrice, rrpParts, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
 import type { Competitor, PriceRow } from "@/app/iniu/IniuTable";
 
@@ -96,7 +96,7 @@ function groupHtml(opts: {
           const v = weekVal(r, w);
           const prev = wi > 0 ? weekVal(r, weeks[wi - 1]) : null;
           const cls = v != null && prev != null && v !== prev ? (v > prev ? "up" : "down") : "";
-          return `<div class="wk" title="${esc(w.dates.join(", "))}"><div class="lbl">${esc(w.label)}</div><div class="val ${cls}">${v != null ? esc(fmtEUR(v)) : "—"}</div></div>`;
+          return `<div class="wk" title="${esc(w.dates.join(", "))}"><div class="lbl">${esc(w.label)}</div><div class="val ${cls}">${v != null ? esc(fmtPrice(v, displayCurrency(r.country))) : "—"}</div></div>`;
         })
         .join("");
       return `<tr${own ? ' class="iniu"' : ""}>${lead}<td>${esc(r.retailer)}${r.country ? ` <span class="muted">(${esc(r.country)})</span>` : ""}</td><td><div class="weeks">${cells}</div></td></tr>`;
@@ -188,7 +188,7 @@ async function chargerExport(country: string, segments: Set<string>, stamp: stri
                 let prev: number | null = null;
                 for (let k = wi - 1; k >= 0 && prev == null; k--) prev = cellVal(r, weeks[k]);
                 const cls = v != null && prev != null && v !== prev ? (v > prev ? "up" : "down") : "";
-                return `<td class="wkc ${cls}">${v != null ? esc(fmtEUR(v)) : '<span class="muted">—</span>'}</td>`;
+                return `<td class="wkc ${cls}">${v != null ? esc(fmtPrice(v, displayCurrency(r.country))) : '<span class="muted">—</span>'}</td>`;
               })
               .join("");
             return `<tr>${lead}<td>${retailer}</td>${cells}</tr>`;
@@ -210,7 +210,7 @@ async function chargerExport(country: string, segments: Set<string>, stamp: stri
   const html = shell({
     title: `INIU Charger Market — ${stamp}`,
     h1: "Charger Market",
-    sub: "Competitor chargers by segment and power band — per-retailer price history (EUR). No INIU chargers yet, so this is the market map rather than a head-to-head.",
+    sub: "Competitor chargers by segment and power band — per-retailer price history. Poland is shown in PLN, every other market in EUR. No INIU chargers yet, so this is the market map rather than a head-to-head.",
     meta:
       `<div>Exported <b>${esc(now.toISOString().slice(0, 16).replace("T", " "))} UTC</b></div>` +
       `<div>Scope: <b>${esc(scopeTxt)}</b></div>` +
@@ -218,7 +218,7 @@ async function chargerExport(country: string, segments: Set<string>, stamp: stri
       `<div><b>${shown}</b> products · ${stats.unmapped} unmapped</div>`,
     sections: panels,
     footer:
-      "Snapshot exported from the INIU Competitive Tracker. Prices normalised to EUR; each column is an ISO week (the latest scrape in that week), and a blank week means no price was scraped. Product images load from the hosted image store, so keep a connection to see them.",
+      "Snapshot exported from the INIU Competitive Tracker. Polish retailers are priced in PLN and every other market in EUR, so figures are not comparable across those two. Each column is an ISO week (the latest scrape in that week), and a blank week means no price was scraped. Product images load from the hosted image store, so keep a connection to see them.",
   });
   return file(html, `iniu-chargers-${stamp}${country ? "-" + country : ""}${segments.size === 1 ? "-" + [...segments][0] : ""}.html`);
 }
@@ -280,7 +280,7 @@ export async function GET(request: Request) {
   const html = shell({
     title: `INIU Prices by Country — ${stamp}`,
     h1: "Prices by Country",
-    sub: "INIU vs mapped competitors — per-retailer price history (EUR). INIU's own price is the first row of each product.",
+    sub: "INIU vs mapped competitors — per-retailer price history. Poland is shown in PLN, every other market in EUR. INIU's own price is the first row of each product.",
     meta:
       `<div>Exported <b>${esc(now.toISOString().slice(0, 16).replace("T", " "))} UTC</b></div>` +
       `<div>Scope: <b>${esc(scopeTxt)}</b></div>` +
@@ -288,7 +288,7 @@ export async function GET(request: Request) {
       `<div><b>${shown}</b> products${picked.size ? ` <span class="muted">(selected of ${products.length})</span>` : ""}</div>`,
     sections,
     footer:
-      "Snapshot exported from the INIU Competitive Tracker. Prices normalised to EUR; each column is an ISO week (the latest scrape in that week). Product images load from the hosted image store, so keep a connection to see them.",
+      "Snapshot exported from the INIU Competitive Tracker. Polish retailers are priced in PLN and every other market in EUR, so figures are not comparable across those two. Each column is an ISO week (the latest scrape in that week). Product images load from the hosted image store, so keep a connection to see them.",
   });
 
   return file(html, `iniu-prices-${stamp}${country ? "-" + country : ""}.html`);

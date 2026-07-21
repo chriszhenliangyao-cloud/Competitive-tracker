@@ -3,7 +3,7 @@ import { catFilter } from "@/lib/category";
 import { getCategoryId } from "@/lib/category-server";
 import { getChannelRows } from "@/lib/data";
 import { getScope, allowsCountry } from "@/lib/scope";
-import { effectivePrice, toEUR } from "@/lib/format";
+import { effectivePrice, toDisplay } from "@/lib/format";
 import type { Prod } from "@/app/PricesByCountry";
 import type { Competitor, PriceRow } from "@/app/iniu/IniuTable";
 
@@ -78,28 +78,31 @@ export async function getDashboardData(): Promise<DashboardData> {
       ownIndex.set(key, row);
       (ownByIniu[s.iniu_product_id] ||= []).push(row);
     }
-    row.byDate[s.scraped_date] = toEUR(
+    // in the currency this retailer's market is read in — PLN for Poland, else EUR
+    row.byDate[s.scraped_date] = toDisplay(
       effectivePrice(s.price != null ? Number(s.price) : null, s.promo_price != null ? Number(s.promo_price) : null),
       s.currency,
+      s.country,
     );
   }
 
-  // per-competitor-SKU price history (EUR) across retailers
+  // per-competitor-SKU price history across retailers, each in its market's currency
   const chRows = new Map<string, PriceRow[]>();
   const chDates = new Map<string, Set<string>>();
   for (const r of channel) {
     const sku = r.product?.sku;
     if (!sku) continue;
     const k = sku.toUpperCase();
+    const country = r.retailer?.country ?? null;
     const byDate: Record<string, number | null> = {};
     for (const s of r.snapshots) {
       if (!s.scraped_date) continue;
-      byDate[s.scraped_date] = toEUR(effectivePrice(s.price, s.promo_price), s.currency);
+      byDate[s.scraped_date] = toDisplay(effectivePrice(s.price, s.promo_price), s.currency, country);
     }
     if (!chRows.has(k)) chRows.set(k, []);
     chRows.get(k)!.push({
       retailer: r.retailer?.display_name ?? "—",
-      country: r.retailer?.country ?? null,
+      country,
       code: r.retailer_product_code,
       byDate,
     });
