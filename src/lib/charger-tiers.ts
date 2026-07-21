@@ -11,8 +11,8 @@
 // when the cable word is the head noun.
 
 export type TierKey =
-  | "wall_45" | "wall_45_65" | "wall_65_70" | "wall_70"
-  | "wall_100" | "wall_100_140" | "wall_140" | "wall_unknown"
+  | "wall_45" | "wall_45_65" | "wall_65_70" | "wall_100_140" | "wall_140"
+  | "wall_unknown"
   | "car"
   | "desk_lo" | "desk_hi"
   | "wireless"
@@ -26,11 +26,9 @@ export const CHARGER_TIERS: Tier[] = [
   // wireless 49/55, so splitting them the same way would be ~20 empty sections.
   { key: "wall_45",      label: "Wall ≤45W",       sub: "Phone / tablet" },
   { key: "wall_45_65",   label: "Wall 45–65W",     sub: "Between the two standard ratings" },
-  { key: "wall_65_70",   label: "Wall 65–70W",     sub: "The 65W class" },
-  { key: "wall_70",      label: "Wall 70W",        sub: "The 70W class" },
-  { key: "wall_100",     label: "Wall 100W",       sub: "The 100W class" },
-  { key: "wall_100_140", label: "Wall 100–140W",   sub: "Multi-device" },
-  { key: "wall_140",     label: "Wall >140W",      sub: "High-power multi-port" },
+  { key: "wall_65_70",   label: "Wall 65–70W",     sub: "The 65–70W class" },
+  { key: "wall_100_140", label: "Wall 100–140W",   sub: "Laptop / multi-device" },
+  { key: "wall_140",     label: "Wall ≥140W",      sub: "High-power multi-port" },
   // Not folded into <45W: that would assert a wattage we never read. These are
   // listings whose page stated no power — they move into a band once a scrape
   // picks one up.
@@ -113,19 +111,17 @@ export function tierOf(name: string | null | undefined, power: string | null | u
   if (DESK_WORD.test(n)) return (w ?? 0) > 200 ? "desk_hi" : "desk_lo";
 
   // 5. Everything else is a wall charger, on the power ladder. The bands follow
-  //    the standard ratings the category is sold on (45 / 65 / 70 / 100 / 140),
-  //    so several are narrow or exact rather than evenly spaced:
-  //      ≤45 · 45<x<65 · 65≤x<70 · 70≤x<100 · =100 · 100<x≤140 · >140
-  //    The 70W band deliberately runs up to 100 rather than stopping at 70: the
-  //    spec asked for an exact "70W" tier, which would drop anything 71–99W on
-  //    the floor. Nothing sits there today (wall wattages jump 67 → 70 → 100),
-  //    so this changes no current row — it just means no listing can vanish.
+  //    the standard ratings the category is sold on (45 / 65 / 100 / 140), so
+  //    they are narrow and unevenly spaced rather than regular:
+  //      ≤45 · 45<x<65 · 65≤x<100 · 100≤x<140 · ≥140
+  //    The 65–70W band is labelled for what it holds but actually runs to <100:
+  //    stopping at 70 would leave 71–99W with no tier at all, so a future 80W
+  //    charger would just vanish from the board. Nothing sits there today — wall
+  //    wattages jump 67 → 70 → 100 — so no current row is affected.
   if (w == null) return "wall_unknown";
   if (w <= 45) return "wall_45";
   if (w < 65) return "wall_45_65";
-  if (w < 70) return "wall_65_70";
-  if (w < 100) return "wall_70";
-  if (w === 100) return "wall_100";
-  if (w <= 140) return "wall_100_140";
+  if (w < 100) return "wall_65_70";
+  if (w < 140) return "wall_100_140";
   return "wall_140";
 }
