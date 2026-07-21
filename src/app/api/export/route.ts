@@ -1,4 +1,7 @@
 import { getDashboardData } from "@/lib/dashboard";
+import { getChargerDashboardData, type ChargerOffer } from "@/lib/dashboard-charger";
+import { getCategoryKey } from "@/lib/category-server";
+import { CHARGER_WEEK_COLS, TIER_LABEL, type TierKey } from "@/lib/charger-tiers";
 import { getScope } from "@/lib/scope";
 import { COUNTRY_NAMES, fmtEUR, rrpParts, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
@@ -6,9 +9,14 @@ import type { Competitor, PriceRow } from "@/app/iniu/IniuTable";
 
 export const dynamic = "force-dynamic";
 
-// Exports the Dashboard (Prices by Country) as a standalone HTML file for sharing
-// offline / by email. Uses the SAME data loader as the page (so it can't drift) and
-// the caller's own country scope (a sales user exports only their country).
+// Exports the Dashboard as a standalone HTML file for sharing offline / by email.
+// Uses the SAME data loader as the page (so it can't drift) and the caller's own
+// country scope (a sales user exports only their country).
+//
+// Which board it exports follows the category the caller is looking at, read from
+// the same cookie the pages use — power banks export the INIU-vs-competitors board,
+// chargers export the segment/power-band market map. Both share the shell and CSS.
+//
 // Images stay as their permanent public Supabase Storage URLs rather than base64:
 // inlining ~300 images would blow the serverless time/size budget, and the URLs are
 // public + permanent so they render anywhere with a connection.
@@ -45,6 +53,8 @@ td.brand-iniu{color:var(--accent);font-weight:700}
 .wk{text-align:right;min-width:54px}
 .wk .lbl{font-size:10px;color:#9aa6ae}
 .wk .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12.5px}
+.wkc{text-align:right;white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12.5px}
+th.wkc{font-family:var(--sans);font-size:11px}
 .up{color:var(--up);font-weight:650}.down{color:var(--down);font-weight:650}
 .muted{color:var(--muted)}
 footer{margin-top:22px;font-size:11.5px;color:var(--muted);line-height:1.6}
@@ -94,11 +104,141 @@ function groupHtml(opts: {
     .join("");
 }
 
+/** The shared document shell — both boards render into this. */
+function shell(o: { title: string; h1: string; sub: string; meta: string; sections: string[]; footer: string }) {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(o.title)}</title>
+<style>${CSS}</style></head>
+<body><div class="wrap">
+<header class="top">
+  <div><h1>${esc(o.h1)}</h1>
+  <p class="sub">${esc(o.sub)}</p></div>
+  <div class="meta">${o.meta}</div>
+</header>
+${o.sections.join("\n") || '<section class="panel"><div style="padding:24px;text-align:center;color:var(--muted)">No prices for this filter.</div></section>'}
+<footer>${esc(o.footer)}</footer>
+</div></body></html>`;
+}
+
+const file = (html: string, name: string) =>
+  new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${name}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+
+/** Charger board: one panel per segment, week columns as real table columns —
+ *  the same shape the page renders, including the shared week set. */
+async function chargerExport(country: string, segments: Set<string>, stamp: string, now: Date, scopeLabel: string) {
+  const { sections: tiers, stats } = await getChargerDashboardData();
+
+  // Same rule as the page: one week set over the whole dataset, so every row
+  // lines up. Computed BEFORE filtering so the columns don't shift with a filter.
+  const allDates = new Set<string>();
+  for (const t of tiers) for (const p of t.products) for (const d of p.dates) allDates.add(d);
+  const weeks = groupWeeks([...allDates].sort()).slice(-CHARGER_WEEK_COLS);
+
+  const inC = (r: ChargerOffer) => !country || r.country === country;
+  const cellVal = (row: ChargerOffer, w: { dates: string[] }): number | null => {
+    for (let i = w.dates.length - 1; i >= 0; i--) {
+      const v = row.byDate[w.dates[i]];
+      if (v != null) return v;
+    }
+    return null;
+  };
+
+  const panels: string[] = [];
+  let shown = 0;
+
+  for (const t of tiers) {
+    if (segments.size > 0 && !segments.has(t.key)) continue;
+    const products = t.products.filter((p) => p.rows.some(inC));
+    if (products.length === 0) continue;
+    shown += products.length;
+
+    const body = products
+      .map((p) => {
+        const rows = p.rows.filter(inC);
+        const thumb = p.image
+          ? `<img class="thumb" src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy">`
+          : `<div class="noimg"></div>`;
+        return rows
+          .map((r, i) => {
+            const lead =
+              i === 0
+                ? `<td rowspan="${rows.length}">${thumb}</td>` +
+                  `<td rowspan="${rows.length}">${esc(titleCase(p.brand))}</td>` +
+                  `<td rowspan="${rows.length}">${esc(p.name)}<div class="psub">${esc(p.sku ?? "—")}${p.mapped ? "" : " · unmapped"}</div></td>` +
+                  `<td rowspan="${rows.length}">${esc(p.watt ?? "—")}${p.ports ? `<div class="psub">${esc(p.ports)}</div>` : ""}</td>`
+                : "";
+            const retailer =
+              (r.url ? `<a href="${esc(r.url)}">${esc(r.retailer)}</a>` : esc(r.retailer)) +
+              (r.country ? ` <span class="muted">(${esc(r.country)})</span>` : "") +
+              (r.inStock === false ? ` <span class="muted">· out of stock</span>` : "") +
+              (r.onPromo ? ` <span class="down">· promo</span>` : "");
+            const cells = weeks
+              .map((w, wi) => {
+                const v = cellVal(r, w);
+                // vs the most recent EARLIER week with a price, not the adjacent
+                // column, which is often empty once coverage has gaps.
+                let prev: number | null = null;
+                for (let k = wi - 1; k >= 0 && prev == null; k--) prev = cellVal(r, weeks[k]);
+                const cls = v != null && prev != null && v !== prev ? (v > prev ? "up" : "down") : "";
+                return `<td class="wkc ${cls}">${v != null ? esc(fmtEUR(v)) : '<span class="muted">—</span>'}</td>`;
+              })
+              .join("");
+            return `<tr>${lead}<td>${retailer}</td>${cells}</tr>`;
+          })
+          .join("");
+      })
+      .join("");
+
+    panels.push(
+      `<section class="panel"><div class="panel-head"><h2>${esc(t.label)} <span class="count">· ${esc(t.sub)}</span></h2>` +
+        `<span class="count">${products.length} products</span></div>` +
+        `<div class="tw"><table><thead><tr><th></th><th>Brand</th><th>Product</th><th>Power</th><th>Retailer</th>` +
+        weeks.map((w) => `<th class="wkc" title="${esc(w.dates.join(", "))}">${esc(w.label)}</th>`).join("") +
+        `</tr></thead><tbody>${body}</tbody></table></div></section>`,
+    );
+  }
+
+  const scopeTxt = country ? (COUNTRY_NAMES[country] ?? country) : scopeLabel;
+  const html = shell({
+    title: `INIU Charger Market — ${stamp}`,
+    h1: "Charger Market",
+    sub: "Competitor chargers by segment and power band — per-retailer price history (EUR). No INIU chargers yet, so this is the market map rather than a head-to-head.",
+    meta:
+      `<div>Exported <b>${esc(now.toISOString().slice(0, 16).replace("T", " "))} UTC</b></div>` +
+      `<div>Scope: <b>${esc(scopeTxt)}</b></div>` +
+      `<div>Segments: <b>${esc(segments.size ? [...segments].map((k) => TIER_LABEL[k as TierKey] ?? k).join(", ") : "All")}</b></div>` +
+      `<div><b>${shown}</b> products · ${stats.unmapped} unmapped</div>`,
+    sections: panels,
+    footer:
+      "Snapshot exported from the INIU Competitive Tracker. Prices normalised to EUR; each column is an ISO week (the latest scrape in that week), and a blank week means no price was scraped. Product images load from the hosted image store, so keep a connection to see them.",
+  });
+  return file(html, `iniu-chargers-${stamp}${country ? "-" + country : ""}${segments.size === 1 ? "-" + [...segments][0] : ""}.html`);
+}
+
 export async function GET(request: Request) {
   const scope = await getScope();
   if (!scope.email) return new Response("Not authorized", { status: 401 });
 
-  const country = new URL(request.url).searchParams.get("country") || "";
+  const params = new URL(request.url).searchParams;
+  const country = params.get("country") || "";
+
+  // Follow the board the caller is on, not a hard-coded category.
+  if ((await getCategoryKey()) === "charger") {
+    const nowC = new Date();
+    // Empty set = every segment, matching the board's "All segments".
+    const segments = new Set((params.get("segments") || "").split(",").map((x) => x.trim()).filter(Boolean));
+    return chargerExport(country, segments, nowC.toISOString().slice(0, 10), nowC,
+      scope.countries === null ? "All countries" : scope.countries.join(", "));
+  }
+
   const { products, compByIniu, ownByIniu, scopeLabel } = await getDashboardData();
 
   const inC = (r: PriceRow) => !country || r.country === country;
@@ -134,27 +274,17 @@ export async function GET(request: Request) {
   const stamp = now.toISOString().slice(0, 10);
   const scopeTxt = country ? (COUNTRY_NAMES[country] ?? country) : scopeLabel;
 
-  const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>INIU Prices by Country — ${esc(stamp)}</title>
-<style>${CSS}</style></head>
-<body><div class="wrap">
-<header class="top">
-  <div><h1>Prices by Country</h1>
-  <p class="sub">INIU vs mapped competitors — per-retailer price history (EUR). INIU's own price is the first row of each product.</p></div>
-  <div class="meta"><div>Exported <b>${esc(now.toISOString().slice(0, 16).replace("T", " "))} UTC</b></div>
-  <div>Scope: <b>${esc(scopeTxt)}</b></div><div><b>${shown}</b> products</div></div>
-</header>
-${sections.join("\n") || '<section class="panel"><div style="padding:24px;text-align:center;color:var(--muted)">No prices for this filter.</div></section>'}
-<footer>Snapshot exported from the INIU Competitive Tracker. Prices normalised to EUR; each column is an ISO week (the latest scrape in that week). Product images load from the hosted image store, so keep a connection to see them.</footer>
-</div></body></html>`;
-
-  return new Response(html, {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Content-Disposition": `attachment; filename="iniu-prices-${stamp}${country ? "-" + country : ""}.html"`,
-      "Cache-Control": "no-store",
-    },
+  const html = shell({
+    title: `INIU Prices by Country — ${stamp}`,
+    h1: "Prices by Country",
+    sub: "INIU vs mapped competitors — per-retailer price history (EUR). INIU's own price is the first row of each product.",
+    meta:
+      `<div>Exported <b>${esc(now.toISOString().slice(0, 16).replace("T", " "))} UTC</b></div>` +
+      `<div>Scope: <b>${esc(scopeTxt)}</b></div><div><b>${shown}</b> products</div>`,
+    sections,
+    footer:
+      "Snapshot exported from the INIU Competitive Tracker. Prices normalised to EUR; each column is an ISO week (the latest scrape in that week). Product images load from the hosted image store, so keep a connection to see them.",
   });
+
+  return file(html, `iniu-prices-${stamp}${country ? "-" + country : ""}.html`);
 }

@@ -49,6 +49,10 @@ export const TIER_LABEL: Record<TierKey, string> = Object.fromEntries(
 // above this is treated as an unknown wattage rather than plotted as real.
 export const MAX_PLAUSIBLE_W = 300;
 
+/** Trailing ISO weeks that get their own price column. Lives here so the page and
+ *  the HTML export can't drift — the export must show the same columns. */
+export const CHARGER_WEEK_COLS = 6;
+
 /** "100 W" / "100W" / "1003W" -> watts, or null when implausible/absent. */
 export function wattOf(raw: string | null | undefined): number | null {
   if (!raw) return null;

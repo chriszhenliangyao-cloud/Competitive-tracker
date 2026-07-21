@@ -4,19 +4,23 @@ import { useMemo, useState } from "react";
 import Thumb from "@/components/Thumb";
 import { COUNTRY_NAMES, fmtEUR, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
+import { CHARGER_WEEK_COLS } from "@/lib/charger-tiers";
 import type { ChargerDashboardData, ChargerOffer, ChargerProduct, ChargerSection } from "@/lib/dashboard-charger";
 
 // Charger dashboard: the market grouped by segment (wall / car / desktop / cable,
 // split by wattage) instead of by INIU product, because there are no INIU
 // chargers to anchor on. Same row/week layout as Prices by Country.
 
-/** How many trailing ISO weeks get their own price column. */
-const WEEK_COLS = 6;
-
 export default function ChargerPrices({ data }: { data: ChargerDashboardData }) {
   const [country, setCountry] = useState("");
-  const [segment, setSegment] = useState("");
+  // Multi-select: empty means "all", so the board opens complete. There are 14
+  // segments and they get compared in groups (e.g. the three laptop-class wall
+  // bands together), which one-at-a-time couldn't do.
+  const [segments, setSegments] = useState<string[]>([]);
   const { sections, countries, stats } = data;
+
+  const toggleSegment = (key: string) =>
+    setSegments((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
 
   // Week columns are computed ONCE over every date in the dataset, not per
   // product: a product only scraped in some weeks would otherwise get its own
@@ -25,7 +29,7 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
   const weeks = useMemo(() => {
     const all = new Set<string>();
     for (const s of sections) for (const p of s.products) for (const d of p.dates) all.add(d);
-    return groupWeeks([...all].sort()).slice(-WEEK_COLS);
+    return groupWeeks([...all].sort()).slice(-CHARGER_WEEK_COLS);
   }, [sections]);
 
   const inC = (r: ChargerOffer) => !country || r.country === country;
@@ -33,10 +37,10 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
   const visible = useMemo(
     () =>
       sections
-        .filter((s) => !segment || s.key === segment)
+        .filter((s) => segments.length === 0 || segments.includes(s.key))
         .map((s) => ({ ...s, products: s.products.filter((p) => p.rows.some(inC)) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sections, segment, country],
+    [sections, segments, country],
   );
 
   const shownCount = visible.reduce((n, s) => n + s.products.length, 0);
@@ -51,7 +55,25 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
             No INIU chargers yet, so this is the market map rather than a head-to-head.
           </p>
         </div>
-        <div className="pill">{shownCount} products</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Static HTML snapshot of exactly what's on screen (both filters carry over). */}
+          <a
+            className="btn"
+            href={`/api/export${
+              country || segments.length
+                ? "?" +
+                  new URLSearchParams({
+                    ...(country ? { country } : {}),
+                    ...(segments.length ? { segments: segments.join(",") } : {}),
+                  }).toString()
+                : ""
+            }`}
+            download
+          >
+            ↓ Export HTML
+          </a>
+          <div className="pill">{shownCount} products</div>
+        </div>
       </header>
 
       <section className="metrics">
@@ -63,15 +85,34 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
 
       <div className="filter-bar">
         <div className="filter-group">
-          <label>Segment</label>
-          <select value={segment} onChange={(e) => setSegment(e.target.value)}>
-            <option value="">All segments</option>
-            {sections.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label} ({s.products.length})
-              </option>
-            ))}
-          </select>
+          <label>Segments</label>
+          {/* <details> gives a real dropdown without click-outside handling. */}
+          <details className="multi">
+            <summary>
+              {segments.length === 0
+                ? "All segments"
+                : segments.length === 1
+                  ? (sections.find((s) => s.key === segments[0])?.label ?? "1 selected")
+                  : `${segments.length} selected`}
+            </summary>
+            <div className="multi-panel">
+              <button type="button" className="multi-clear" onClick={() => setSegments([])}>
+                Select all
+              </button>
+              {sections.map((s) => (
+                <label key={s.key} className="multi-row">
+                  <input
+                    type="checkbox"
+                    checked={segments.includes(s.key)}
+                    onChange={() => toggleSegment(s.key)}
+                  />
+                  <span>
+                    {s.label} <span className="muted">({s.products.length})</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </details>
         </div>
         <div className="filter-group">
           <label>Country</label>
