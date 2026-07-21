@@ -4,8 +4,7 @@ import { useMemo, useState } from "react";
 import Thumb from "@/components/Thumb";
 import { COUNTRY_NAMES, fmtEUR, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
-import type { ChargerDashboardData, ChargerProduct, ChargerSection } from "@/lib/dashboard-charger";
-import type { PriceRow } from "./iniu/IniuTable";
+import type { ChargerDashboardData, ChargerOffer, ChargerProduct, ChargerSection } from "@/lib/dashboard-charger";
 
 // Charger dashboard: the market grouped by segment (wall / car / desktop / cable,
 // split by wattage) instead of by INIU product, because there are no INIU
@@ -16,7 +15,7 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
   const [segment, setSegment] = useState("");
   const { sections, countries, stats } = data;
 
-  const inC = (r: PriceRow) => !country || r.country === country;
+  const inC = (r: ChargerOffer) => !country || r.country === country;
 
   const visible = useMemo(
     () =>
@@ -85,7 +84,7 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
   );
 }
 
-function Section({ section, inC }: { section: ChargerSection; inC: (r: PriceRow) => boolean }) {
+function Section({ section, inC }: { section: ChargerSection; inC: (r: ChargerOffer) => boolean }) {
   if (section.products.length === 0) return null;
   return (
     <section className="table-panel">
@@ -118,12 +117,12 @@ function Section({ section, inC }: { section: ChargerSection; inC: (r: PriceRow)
   );
 }
 
-function ProductRows({ product, inC }: { product: ChargerProduct; inC: (r: PriceRow) => boolean }) {
+function ProductRows({ product, inC }: { product: ChargerProduct; inC: (r: ChargerOffer) => boolean }) {
   const rows = product.rows.filter(inC);
   if (rows.length === 0) return null;
   const weeks = groupWeeks(product.dates).slice(-4);
   // price for a week = value at the latest date in that week the row has
-  const weekVal = (row: PriceRow, w: { dates: string[] }): number | null => {
+  const weekVal = (row: ChargerOffer, w: { dates: string[] }): number | null => {
     for (let i = w.dates.length - 1; i >= 0; i--) {
       const v = row.byDate[w.dates[i]];
       if (v != null) return v;
@@ -148,12 +147,25 @@ function ProductRows({ product, inC }: { product: ChargerProduct; inC: (r: Price
                   {!product.mapped ? <span className="fp-src raw" style={{ marginLeft: 6 }}>unmapped</span> : null}
                 </div>
               </td>
-              <td rowSpan={rows.length}>{product.watt ?? "—"}</td>
+              <td rowSpan={rows.length}>
+                {product.watt ?? "—"}
+                {product.ports ? <div className="sub">{product.ports}</div> : null}
+              </td>
             </>
           ) : null}
           <td>
-            {r.retailer}
+            {r.url ? (
+              <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>
+                {r.retailer} ↗
+              </a>
+            ) : (
+              r.retailer
+            )}
             {r.country ? <span className="muted"> ({r.country})</span> : null}
+            <div style={{ display: "flex", gap: 5, marginTop: 3 }}>
+              {r.inStock === false ? <span className="fp-src raw">out of stock</span> : null}
+              {r.onPromo ? <span className="fp-src lib">promo</span> : null}
+            </div>
           </td>
           <td>
             <div style={{ display: "flex", gap: 10 }}>

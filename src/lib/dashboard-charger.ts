@@ -19,15 +19,23 @@ import type { PriceRow } from "@/app/iniu/IniuTable";
 // listings are still unmapped (new_listing) — reading the library only would
 // hide most of what's actually on shelf.
 
+/** A retailer offer: the shared price history plus this retailer's link/state. */
+export type ChargerOffer = PriceRow & {
+  url: string | null;
+  inStock: boolean | null;
+  onPromo: boolean;
+};
+
 export type ChargerProduct = {
   key: string;
   name: string;
   brand: string;
   sku: string | null;
   watt: string | null;
+  ports: string | null;
   image: string | null;
   mapped: boolean;
-  rows: PriceRow[];
+  rows: ChargerOffer[];
   dates: string[];
 };
 export type ChargerSection = { key: TierKey; label: string; sub: string; products: ChargerProduct[] };
@@ -73,11 +81,11 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
       sb
         .from("listings")
       .select(
-        `id, raw_name, raw_sku, raw_ean, status, retailer_product_code,
+        `id, raw_name, raw_sku, raw_ean, status, retailer_product_code, url,
          brand:brands(display_name),
          retailer:retailers(display_name, country),
-         product:products(id, sku, name, wired_power, image_url),
-         snapshots:price_snapshots(scraped_date, price, promo_price, currency)`,
+         product:products(id, sku, name, wired_power, usb_ports, image_url),
+         snapshots:price_snapshots(scraped_date, price, promo_price, currency, in_stock)`,
         )
         .limit(20000),
       catId,
@@ -92,10 +100,11 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
     raw_ean: string | null;
     status: string | null;
     retailer_product_code: string | null;
+    url: string | null;
     brand: { display_name: string } | null;
     retailer: { display_name: string; country: string | null } | null;
-    product: { id: number; sku: string; name: string; wired_power: string | null; image_url: string | null } | null;
-    snapshots: { scraped_date: string | null; price: number | null; promo_price: number | null; currency: string | null }[];
+    product: { id: number; sku: string; name: string; wired_power: string | null; usb_ports: string | null; image_url: string | null } | null;
+    snapshots: { scraped_date: string | null; price: number | null; promo_price: number | null; currency: string | null; in_stock: boolean | null }[];
   };
 
   const scope = await getScope();
@@ -114,10 +123,19 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
     const name = l.product?.name || l.raw_name || "—";
     const key = l.product?.id ? `p${l.product.id}` : `n:${(l.raw_name ?? "").toLowerCase().trim()}`;
 
+    // price per date, plus the newest snapshot's stock/promo state
     const byDate: Record<string, number | null> = {};
+    let latest = "";
+    let inStock: boolean | null = null;
+    let onPromo = false;
     for (const s of l.snapshots ?? []) {
       if (!s.scraped_date) continue;
       byDate[s.scraped_date] = toEUR(effectivePrice(s.price, s.promo_price), s.currency);
+      if (s.scraped_date >= latest) {
+        latest = s.scraped_date;
+        inStock = s.in_stock;
+        onPromo = s.promo_price != null && s.price != null && s.promo_price < s.price;
+      }
     }
 
     let p = byKey.get(key);
@@ -128,6 +146,7 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
         brand: l.brand?.display_name ?? "—",
         sku: l.product?.sku ?? l.raw_sku ?? null,
         watt: l.product?.wired_power ?? null,
+        ports: l.product?.usb_ports ?? null,
         image:
           l.product?.image_url ??
           fpImg.get((l.retailer_product_code ?? "").trim().toUpperCase()) ??
@@ -153,6 +172,9 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
       country,
       code: null,
       byDate,
+      url: l.url,
+      inStock,
+      onPromo,
     });
     listingCount++;
     if (!l.product?.id) unmapped++;
