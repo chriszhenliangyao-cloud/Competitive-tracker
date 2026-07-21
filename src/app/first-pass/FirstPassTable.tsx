@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { updateFirstPassSpecs, setFirstPassSku } from "./actions";
 import Thumb from "@/components/Thumb";
+import EditableCell from "@/components/EditableCell";
 import { COUNTRY_NAMES, fmtMoney, titleCase } from "@/lib/format";
 
 export type FpRow = {
@@ -30,6 +31,39 @@ export default function FirstPassTable({ rows, canEdit }: { rows: FpRow[]; canEd
   const [editing, setEditing] = useState<FpRow | null>(null);
   const [patched, setPatched] = useState<Record<number, Partial<FpRow>>>({});
   const withPatch = (r: FpRow): FpRow => ({ ...r, ...(patched[r.id] ?? {}) });
+
+  /** Inline cell save. The SKU is the mapping decision and takes a different
+   *  path from the specs — see actions.ts. Returns null on success. */
+  const saveField = async (row: FpRow, field: keyof FpRow, raw: string): Promise<string | null> => {
+    const v = raw.trim();
+    if (field === "sku") {
+      const res = await setFirstPassSku(row.id, v, row.product_name ?? undefined);
+      if (!res.ok) return res.error ?? "Save failed";
+      setPatched((cur) => ({ ...cur, [row.id]: { ...(cur[row.id] ?? {}), sku: v || null } }));
+      return null;
+    }
+    const res = await updateFirstPassSpecs(row.id, { [field]: v || null });
+    if (!res.ok) return res.error ?? "Save failed";
+    setPatched((cur) => ({ ...cur, [row.id]: { ...(cur[row.id] ?? {}), [field]: v || null } }));
+    return null;
+  };
+
+  const cell = (row: FpRow, field: keyof FpRow, opts?: { placeholder?: string; width?: number }) => (
+    <EditableCell
+      value={row[field] == null ? null : String(row[field])}
+      placeholder={opts?.placeholder}
+      width={opts?.width}
+      disabled={!canEdit}
+      title={
+        field === "sku"
+          ? "The mapping decision — moves the listing and the review with it"
+          : row.mapped
+            ? "Saves to the Library product this code maps to"
+            : "Saves on this channel row (unmapped code)"
+      }
+      onSave={(next) => saveField(row, field, next)}
+    />
+  );
   const [retailer, setRetailer] = useState("");
   const [brand, setBrand] = useState("");
   const [q, setQ] = useState("");
@@ -127,7 +161,6 @@ export default function FirstPassTable({ rows, canEdit }: { rows: FpRow[]; canEd
                 <th>Promo</th>
                 <th>Stock</th>
                 <th>Date</th>
-                {canEdit ? <th></th> : null}
               </tr>
             </thead>
             <tbody>
@@ -135,11 +168,25 @@ export default function FirstPassTable({ rows, canEdit }: { rows: FpRow[]; canEd
                 const r = withPatch(raw);
                 return (
                 <tr key={r.id}>
-                  <td>
-                    <Thumb src={r.image_url} alt={r.product_name ?? ""} />
+                  <td className="row-lead">
+                    {canEdit ? (
+                      <button className="thumb-btn" title="Open the full editor" onClick={() => setEditing(raw)}>
+                        <Thumb src={r.image_url} alt={r.product_name ?? ""} />
+                      </button>
+                    ) : (
+                      <Thumb src={r.image_url} alt={r.product_name ?? ""} />
+                    )}
                   </td>
                   <td>
-                    {r.url ? (
+                    {canEdit ? (
+                      <>
+                        {cell(r, "product_name", { width: 260 })}
+                        {r.url ? (
+                          <a href={r.url} target="_blank" rel="noreferrer" title="Open at the retailer"
+                             style={{ color: "var(--accent)", marginLeft: 6 }}>↗</a>
+                        ) : null}
+                      </>
+                    ) : r.url ? (
                       <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
                         {r.product_name || "—"} ↗
                       </a>
@@ -154,10 +201,10 @@ export default function FirstPassTable({ rows, canEdit }: { rows: FpRow[]; canEd
                     ) : null}
                   </td>
                   <td>{titleCase(r.brand?.display_name)}</td>
-                  <td className="muted">{r.sku ?? "—"}</td>
+                  <td className="muted">{cell(r, "sku", { width: 150 })}</td>
                   <td className="muted">{r.retailer_product_code ?? "—"}</td>
-                  <td>{r.capacity ?? "—"}</td>
-                  <td>{r.power ?? "—"}</td>
+                  <td>{cell(r, "capacity", { placeholder: "20000 mAh" })}</td>
+                  <td>{cell(r, "power", { placeholder: "65W", width: 80 })}</td>
                   <td>
                     {r.mapped ? (
                       <span className="fp-src lib" title="Specs from the mapped Library product">
@@ -177,11 +224,6 @@ export default function FirstPassTable({ rows, canEdit }: { rows: FpRow[]; canEd
                   </td>
                   <td>{r.in_stock == null ? "—" : r.in_stock ? "Yes" : "No"}</td>
                   <td>{r.scraped_date ?? "—"}</td>
-                  {canEdit ? (
-                    <td>
-                      <button className="unlink-btn" onClick={() => setEditing(r)}>Edit</button>
-                    </td>
-                  ) : null}
                 </tr>
                 );
               })}

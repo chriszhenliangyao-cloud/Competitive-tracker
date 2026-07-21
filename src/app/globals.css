@@ -831,3 +831,29 @@ tr.row-hidden td .sub {
   margin: 0;
   max-width: 60%;
 }
+
+/* Inline-editable table cells (Library / First Pass). The affordance has to be
+   visible without hunting: an outline appears on hover, the cell keeps its text
+   width until clicked. */
+.cell-err {
+  font-size: 11px;
+  color: var(--danger);
+  margin-top: 2px;
+  max-width: 220px;
+  white-space: normal;
+}
+/* Thumbnail doubles as the way into the full editor (image upload lives there). */
+.thumb-btn {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+}
+.thumb-btn:hover {
+  border-color: var(--accent);
+}
+.row-lead {
+  white-space: nowrap;
+}

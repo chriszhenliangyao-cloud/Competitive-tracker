@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
+import EditableCell from "@/components/EditableCell";
 import { fmtMoney, titleCase } from "@/lib/format";
 import { updateProduct, uploadProductImage, renameProductSku, type ProductPatch } from "./actions";
 
@@ -70,6 +71,43 @@ export default function LibraryTable({ products, canEdit }: { products: LibProdu
   // merge a partial product (from a save or image upload) into the table row, without closing the modal
   const applyPatch = (saved: Record<string, unknown>) =>
     setRows((prev) => prev.map((r) => (r.id === saved.id ? ({ ...r, ...saved } as LibProduct) : r)));
+
+  /** Inline cell save. Returns null on success, or the message to show in the cell. */
+  const saveField = async (row: LibProduct, field: keyof LibProduct, raw: string): Promise<string | null> => {
+    const v = raw.trim();
+    if (field === "sku") {
+      const res = await renameProductSku(row.id, v);
+      if (!res.ok) return res.error ?? "Rename failed";
+      applyPatch({ id: row.id, sku: v });
+      return null;
+    }
+    let value: string | number | boolean | null = v === "" ? null : v;
+    if (field === "rrp") {
+      if (v !== "" && Number.isNaN(Number(v))) return "Must be a number";
+      value = v === "" ? null : Number(v);
+    }
+    if (field === "magsafe") value = v === "" ? null : v === "true";
+    const res = await updateProduct(row.id, { [field]: value } as ProductPatch, row.updated_at);
+    if (!res.ok || !res.product) return res.error ?? "Save failed";
+    applyPatch(res.product); // carries the new updated_at, so the next edit locks correctly
+    return null;
+  };
+
+  const cell = (
+    row: LibProduct,
+    field: keyof LibProduct,
+    opts?: { kind?: "text" | "number" | "boolean"; placeholder?: string; width?: number },
+  ) => (
+    <EditableCell
+      value={row[field] == null ? null : String(row[field])}
+      kind={opts?.kind}
+      placeholder={opts?.placeholder}
+      width={opts?.width}
+      disabled={!canEdit}
+      title={field === "sku" ? "Product identity — renaming carries the channel mappings with it" : undefined}
+      onSave={(next) => saveField(row, field, next)}
+    />
+  );
 
   return (
     <>
@@ -158,24 +196,40 @@ export default function LibraryTable({ products, canEdit }: { products: LibProdu
                 const dot = f === KEY_FIELDS.length ? "dot-green" : f >= 3 ? "dot-amber" : "dot-gray";
                 return (
                   <tr key={p.id}>
-                    <td><Thumb src={p.image_url} alt={p.name} /></td>
-                    <td className="muted">{p.sku}</td>
-                    <td>{p.name}</td>
+                    <td className="row-lead">
+                      {canEdit ? (
+                        <button className="thumb-btn" title="Open the full editor (image upload)" onClick={() => setEditing(p)}>
+                          <Thumb src={p.image_url} alt={p.name} />
+                        </button>
+                      ) : (
+                        <Thumb src={p.image_url} alt={p.name} />
+                      )}
+                    </td>
+                    <td className="muted">{cell(p, "sku", { width: 150 })}</td>
+                    <td>{cell(p, "name", { width: 260 })}</td>
                     <td>{titleCase(p.brand?.display_name)}</td>
-                    <td className="muted">{p.ean ?? "—"}</td>
-                    <td>{p.capacity ?? "—"}</td>
-                    <td>{p.wired_power ?? "—"}</td>
-                    <td>{p.wireless_power ?? "—"}</td>
-                    <td>{p.usb_ports ?? "—"}</td>
-                    <td>{p.magsafe ? <span className="badge badge-magsafe">Yes</span> : "—"}</td>
-                    <td>{p.size ?? "—"}</td>
-                    <td>{p.weight ?? "—"}</td>
-                    <td>{p.rrp != null ? fmtMoney(Number(p.rrp), p.rrp_currency) : "—"}</td>
+                    <td className="muted">{cell(p, "ean", { width: 130 })}</td>
+                    <td>{cell(p, "capacity", { placeholder: "20000 mAh" })}</td>
+                    <td>{cell(p, "wired_power", { placeholder: "65W", width: 80 })}</td>
+                    <td>{cell(p, "wireless_power", { placeholder: "15W", width: 80 })}</td>
+                    <td>{cell(p, "usb_ports", { placeholder: "USB-C*2", width: 140 })}</td>
+                    <td>
+                      {canEdit ? (
+                        cell(p, "magsafe", { kind: "boolean" })
+                      ) : p.magsafe ? (
+                        <span className="badge badge-magsafe">Yes</span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>{cell(p, "size")}</td>
+                    <td>{cell(p, "weight", { width: 80 })}</td>
+                    <td>
+                      {canEdit ? cell(p, "rrp", { kind: "number", width: 80 })
+                        : p.rrp != null ? fmtMoney(Number(p.rrp), p.rrp_currency) : "—"}
+                    </td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <span className={`dot ${dot}`} title={`${f}/${KEY_FIELDS.length} fields`} />
-                      {canEdit ? (
-                        <button className="unlink-btn" style={{ marginLeft: 8 }} onClick={() => setEditing(p)}>Edit</button>
-                      ) : null}
                     </td>
                   </tr>
                 );
