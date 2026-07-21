@@ -37,29 +37,61 @@ export type ChargerDashboardData = {
   stats: { products: number; listings: number; retailers: number; unmapped: number };
 };
 
+// (retailer code | sku | ean) -> scraped image url, for products with no library image.
+async function getFirstPassImages(catId: number): Promise<Map<string, string>> {
+  const sb = getSupabase();
+  const { data } = await catFilter(
+    sb
+      .from("first_pass_observations")
+      .select("sku, ean, retailer_product_code, image_url")
+      .not("image_url", "is", null)
+      .limit(20000),
+    catId,
+  );
+  const idx = new Map<string, string>();
+  for (const o of (data ?? []) as unknown as {
+    sku: string | null; ean: string | null; retailer_product_code: string | null; image_url: string | null;
+  }[]) {
+    if (!o.image_url) continue;
+    for (const k of [o.retailer_product_code, o.sku, o.ean]) {
+      const kk = (k ?? "").trim().toUpperCase();
+      if (kk && !idx.has(kk)) idx.set(kk, o.image_url);
+    }
+  }
+  return idx;
+}
+
 export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
   const sb = getSupabase();
   const catId = await getCategoryId();
 
-  const { data } = await catFilter(
-    sb
-      .from("listings")
+  // Products without their own image borrow the scraped first-pass image, the
+  // same fallback the powerbank Channel view uses — otherwise anything not in
+  // the library renders as a blank tile.
+  const [{ data }, fpImg] = await Promise.all([
+    catFilter(
+      sb
+        .from("listings")
       .select(
-        `id, raw_name, raw_sku, status, retailer_product_code,
+        `id, raw_name, raw_sku, raw_ean, status, retailer_product_code,
          brand:brands(display_name),
          retailer:retailers(display_name, country),
          product:products(id, sku, name, wired_power, image_url),
          snapshots:price_snapshots(scraped_date, price, promo_price, currency)`,
-      )
-      .limit(20000),
-    catId,
-  );
+        )
+        .limit(20000),
+      catId,
+    ),
+    getFirstPassImages(catId),
+  ]);
 
   type L = {
     id: number;
     raw_name: string | null;
     raw_sku: string | null;
+    raw_ean: string | null;
     status: string | null;
+    retailer_product_code: string | null;
     brand: { display_name: string } | null;
     retailer: { display_name: string; country: string | null } | null;
     product: { id: number; sku: string; name: string; wired_power: string | null; image_url: string | null } | null;
@@ -96,14 +128,26 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
         brand: l.brand?.display_name ?? "—",
         sku: l.product?.sku ?? l.raw_sku ?? null,
         watt: l.product?.wired_power ?? null,
-        image: l.product?.image_url ?? null,
+        image:
+          l.product?.image_url ??
+          fpImg.get((l.retailer_product_code ?? "").trim().toUpperCase()) ??
+          fpImg.get((l.raw_sku ?? "").trim().toUpperCase()) ??
+          fpImg.get((l.raw_ean ?? "").trim().toUpperCase()) ??
+          null,
         mapped: !!l.product?.id,
         rows: [],
         dates: [],
       };
       byKey.set(key, p);
     }
-    if (!p.image && l.product?.image_url) p.image = l.product.image_url;
+    if (!p.image) {
+      p.image =
+        l.product?.image_url ??
+        fpImg.get((l.retailer_product_code ?? "").trim().toUpperCase()) ??
+        fpImg.get((l.raw_sku ?? "").trim().toUpperCase()) ??
+        fpImg.get((l.raw_ean ?? "").trim().toUpperCase()) ??
+        null;
+    }
     p.rows.push({
       retailer: l.retailer?.display_name ?? "—",
       country,
