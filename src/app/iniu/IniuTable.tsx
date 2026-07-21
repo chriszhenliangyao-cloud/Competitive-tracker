@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
 import Sparkline from "@/components/Sparkline";
-import { COUNTRY_NAMES, fmtEUR, fmtMoney, titleCase } from "@/lib/format";
+import { COUNTRY_NAMES, fmtEUR, rrpParts, titleCase } from "@/lib/format";
 import { hideCompetitor, unhideCompetitor } from "./actions";
 
 export type PriceRow = {
@@ -388,7 +388,7 @@ function GeneralTable({
               <td>{c.weight ?? "—"}</td>
               <td>{c.usb_ports ?? "—"}</td>
               <td>{c.magsafe ? <span className="badge badge-magsafe">Yes</span> : "—"}</td>
-              <td>{c.rrp != null ? fmtMoney(c.rrp, c.rrp_currency) : "—"}</td>
+              <td><Rrp value={c.rrp} currency={c.rrp_currency} /></td>
               <td>
                 <HideBtn hidden={hidden} onClick={() => onToggleHide(c, !hidden)} busy={busy === c.id} />
               </td>
@@ -464,7 +464,7 @@ function PriceTable({
                   {c.name}
                   <div className="sub">{c.sku}</div>
                 </td>
-                <td>{c.rrp != null ? fmtMoney(c.rrp, c.rrp_currency) : "—"}</td>
+                <td><Rrp value={c.rrp} currency={c.rrp_currency} /></td>
                 <td className="muted" colSpan={3}>
                   no channel listing
                 </td>
@@ -486,7 +486,7 @@ function PriceTable({
                     {c.name}
                     <div className="sub">{c.sku}</div>
                   </td>
-                  <td rowSpan={rows.length}>{c.rrp != null ? fmtMoney(c.rrp, c.rrp_currency) : "—"}</td>
+                  <td rowSpan={rows.length}><Rrp value={c.rrp} currency={c.rrp_currency} /></td>
                 </>
               ) : null}
               <td>
@@ -591,6 +591,17 @@ function OwnPriceTable({
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** RRP in EUR (so it reads against the EUR price columns) over the original. */
+function Rrp({ value, currency }: { value: number | null; currency: string | null }) {
+  const { eur, native } = rrpParts(value, currency);
+  return (
+    <>
+      {eur}
+      {native ? <div className="sub">{native}</div> : null}
+    </>
   );
 }
 

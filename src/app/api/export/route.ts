@@ -1,6 +1,6 @@
 import { getDashboardData } from "@/lib/dashboard";
 import { getScope } from "@/lib/scope";
-import { COUNTRY_NAMES, fmtEUR, fmtMoney, titleCase } from "@/lib/format";
+import { COUNTRY_NAMES, fmtEUR, rrpParts, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
 import type { Competitor, PriceRow } from "@/app/iniu/IniuTable";
 
@@ -76,7 +76,10 @@ function groupHtml(opts: {
           ? `<td rowspan="${rows.length}">${thumb}</td>` +
             `<td rowspan="${rows.length}"${own ? ' class="brand-iniu"' : ""}>${esc(brand)}</td>` +
             `<td rowspan="${rows.length}">${esc(name)}<div class="psub">${esc(sku)}</div></td>` +
-            `<td rowspan="${rows.length}">${rrp != null ? esc(fmtMoney(rrp, rrpCurrency)) : "—"}</td>`
+            `<td rowspan="${rows.length}">${(() => {
+              const { eur, native } = rrpParts(rrp, rrpCurrency);
+              return esc(eur) + (native ? `<div class="sub">${esc(native)}</div>` : "");
+            })()}</td>`
           : "";
       const cells = weeks
         .map((w, wi) => {

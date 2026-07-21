@@ -44,6 +44,33 @@ export function fmtEUR(value: number | null | undefined): string {
   return `€${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/**
+ * RRP for the comparison boards (Dashboard / INIU / HTML export).
+ *
+ * Those tables already normalise every price column to EUR, so an RRP left in
+ * its own currency was the one figure you couldn't read across a row — a Polish
+ * "229.00 zł" sitting next to Spanish EUR prices. 203 of 529 RRPs are non-EUR
+ * (188 PLN, 15 GBP), so this was most of a column.
+ *
+ * Returns the EUR figure plus the original, which callers show underneath: the
+ * native value is what the source actually stated and the EUR one is our static
+ * FX applied to it, so we don't silently replace it.
+ *
+ * The Library and First Pass pages deliberately keep native — the Library is the
+ * catalogue of record and First Pass shows what a retailer actually charges.
+ */
+export function rrpParts(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+): { eur: string; native: string | null } {
+  if (value == null) return { eur: "—", native: null };
+  const cur = (currency || "EUR").toUpperCase();
+  const eur = toEUR(value, cur);
+  // Unknown currency: no rate to apply, so show what we have rather than invent one.
+  if (eur == null) return { eur: fmtMoney(value, cur), native: null };
+  return { eur: fmtEUR(eur), native: cur === "EUR" ? null : fmtMoney(value, cur) };
+}
+
 export function titleCase(s: string | null | undefined): string {
   if (!s) return "";
   return s

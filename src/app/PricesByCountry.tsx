@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Thumb from "@/components/Thumb";
 import Sparkline from "@/components/Sparkline";
-import { COUNTRY_NAMES, fmtEUR, fmtMoney, titleCase } from "@/lib/format";
+import { COUNTRY_NAMES, fmtEUR, rrpParts, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
 import type { Competitor, PriceRow } from "./iniu/IniuTable";
 
@@ -217,7 +217,17 @@ function Group({
                 {name}
                 <div className="sub">{sku}</div>
               </td>
-              <td rowSpan={rows.length}>{rrp != null ? fmtMoney(rrp, rrpCurrency) : "—"}</td>
+              <td rowSpan={rows.length}>
+                {(() => {
+                  const { eur, native } = rrpParts(rrp, rrpCurrency);
+                  return (
+                    <>
+                      {eur}
+                      {native ? <div className="sub">{native}</div> : null}
+                    </>
+                  );
+                })()}
+              </td>
             </>
           ) : null}
           <td>
