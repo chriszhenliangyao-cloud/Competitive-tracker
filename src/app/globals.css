@@ -762,3 +762,46 @@ tr.row-hidden td .sub {
 .multi-clear:hover {
   background: var(--subtle);
 }
+
+/* Inline cell editing (charger dashboard power). Reads as text until hovered so
+   the table doesn't look like a form. */
+.cell-edit {
+  border: 1px dashed transparent;
+  border-radius: 5px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  padding: 1px 5px;
+  margin: -1px -5px;
+  cursor: text;
+  text-align: left;
+}
+.cell-edit:hover {
+  border-color: var(--border);
+  background: var(--subtle);
+}
+.cell-input {
+  width: 90px;
+  height: 28px;
+  padding: 4px 7px;
+  font-size: 13px;
+}
+.cell-ok,
+.cell-cancel {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.cell-ok {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cell-ok:disabled,
+.cell-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

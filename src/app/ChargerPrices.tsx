@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Thumb from "@/components/Thumb";
 import MultiSelect from "@/components/MultiSelect";
+import { updateChargerPower } from "./charger-power-actions";
 import { COUNTRY_NAMES, fmtEUR, titleCase } from "@/lib/format";
 import { groupWeeks } from "@/lib/weeks";
 import { CHARGER_WEEK_COLS } from "@/lib/charger-tiers";
@@ -18,7 +19,7 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
   // segments and they get compared in groups (e.g. the three laptop-class wall
   // bands together), which one-at-a-time couldn't do.
   const [segments, setSegments] = useState<string[]>([]);
-  const { sections, countries, stats } = data;
+  const { sections, countries, stats, canEdit } = data;
 
 
   // Week columns are computed ONCE over every date in the dataset, not per
@@ -108,7 +109,7 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
           <div className="empty">No chargers match these filters.</div>
         </div>
       ) : (
-        visible.map((s) => <Section key={s.key} section={s} inC={inC} weeks={weeks} />)
+        visible.map((s) => <Section key={s.key} section={s} inC={inC} weeks={weeks} canEdit={canEdit} />)
       )}
     </>
   );
@@ -120,10 +121,12 @@ function Section({
   section,
   inC,
   weeks,
+  canEdit,
 }: {
   section: ChargerSection;
   inC: (r: ChargerOffer) => boolean;
   weeks: Week[];
+  canEdit: boolean;
 }) {
   if (section.products.length === 0) return null;
   return (
@@ -152,7 +155,7 @@ function Section({
           </thead>
           <tbody>
             {section.products.map((p) => (
-              <ProductRows key={p.key} product={p} inC={inC} weeks={weeks} />
+              <ProductRows key={p.key} product={p} inC={inC} weeks={weeks} canEdit={canEdit} />
             ))}
           </tbody>
         </table>
@@ -165,10 +168,12 @@ function ProductRows({
   product,
   inC,
   weeks,
+  canEdit,
 }: {
   product: ChargerProduct;
   inC: (r: ChargerOffer) => boolean;
   weeks: Week[];
+  canEdit: boolean;
 }) {
   const rows = product.rows.filter(inC);
   if (rows.length === 0) return null;
@@ -199,7 +204,7 @@ function ProductRows({
                 </div>
               </td>
               <td rowSpan={rows.length}>
-                {product.watt ?? "—"}
+                <PowerCell product={product} canEdit={canEdit} />
                 {product.ports ? <div className="sub">{product.ports}</div> : null}
               </td>
             </>
@@ -236,6 +241,78 @@ function ProductRows({
         </tr>
       ))}
     </>
+  );
+}
+
+// Inline power editor. Which table the write lands in is decided server-side by
+// whether the row is mapped (Library) or not (first_pass raw fallback) — see
+// charger-power-actions.ts. Shown to admins only; the action re-checks.
+function PowerCell({ product, canEdit }: { product: ChargerProduct; canEdit: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(product.watt ?? "");
+  const [shown, setShown] = useState(product.watt);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (!canEdit) return <>{shown ?? "—"}</>;
+
+  const save = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateChargerPower(
+        { productId: product.productId, listingIds: product.listingIds },
+        value,
+      );
+      if (res.ok) {
+        setShown(res.power ?? null);
+        setEditing(false);
+      } else {
+        setError(res.error ?? "Could not save");
+      }
+    });
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="cell-edit"
+        title={product.productId ? "Edit — saves to the Library" : "Edit — saves to this channel row"}
+        onClick={() => {
+          setValue(shown ?? "");
+          setEditing(true);
+        }}
+      >
+        {shown ?? <span className="muted">— add</span>}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ minWidth: 96 }}>
+      <input
+        autoFocus
+        className="cell-input"
+        value={value}
+        placeholder="e.g. 65"
+        disabled={pending}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+      <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+        <button type="button" className="cell-ok" onClick={save} disabled={pending}>
+          {pending ? "…" : "Save"}
+        </button>
+        <button type="button" className="cell-cancel" onClick={() => setEditing(false)} disabled={pending}>
+          Cancel
+        </button>
+      </div>
+      <div className="sub">{product.productId ? "→ Library" : "→ channel row"}</div>
+      {error ? <div className="sub" style={{ color: "var(--up, #c0392b)" }}>{error}</div> : null}
+    </div>
   );
 }
 

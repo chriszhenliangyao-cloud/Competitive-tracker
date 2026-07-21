@@ -28,6 +28,10 @@ export type ChargerOffer = PriceRow & {
 
 export type ChargerProduct = {
   key: string;
+  /** Set when this row resolved to a library product — power then lives there. */
+  productId: number | null;
+  /** The listings behind this row; the unmapped power edit writes their first_pass entries. */
+  listingIds: number[];
   name: string;
   brand: string;
   sku: string | null;
@@ -43,6 +47,8 @@ export type ChargerDashboardData = {
   sections: ChargerSection[];
   countries: string[];
   stats: { products: number; listings: number; retailers: number; unmapped: number };
+  /** Only admins may edit power; sales get a read-only board. */
+  canEdit: boolean;
 };
 
 /** What the scrape saw, for listings with no library product behind them. */
@@ -170,6 +176,8 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
         ports,
         image,
         mapped: !!l.product?.id,
+        productId: l.product?.id ?? null,
+        listingIds: [],
         rows: [],
         dates: [],
       };
@@ -179,6 +187,7 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
     if (!p.image) p.image = image;
     if (!p.watt) p.watt = watt;
     if (!p.ports) p.ports = ports;
+    p.listingIds.push(l.id);
     p.rows.push({
       retailer: l.retailer?.display_name ?? "—",
       country,
@@ -215,5 +224,6 @@ export async function getChargerDashboardData(): Promise<ChargerDashboardData> {
     sections,
     countries: [...countries].sort(),
     stats: { products: byKey.size, listings: listingCount, retailers: retailers.size, unmapped },
+    canEdit: scope.role === "admin",
   };
 }

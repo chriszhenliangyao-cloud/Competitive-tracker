@@ -80,7 +80,7 @@ Every field has ONE home table. Every view JOINs to the home; editing writes the
 
 | Field class | Home (source of truth) | Edited via |
 |---|---|---|
-| Competitor specs/identity: capacity, wired_power, wireless_power, usb_ports, size, weight, magsafe, ean, name, rrp, image_url | **`products`** | Library page |
+| Competitor specs/identity: capacity, wired_power, wireless_power, usb_ports, size, weight, magsafe, ean, name, rrp, image_url | **`products`** | Library page · charger Dashboard power cell (mapped rows) |
 | INIU's own specs | **`iniu_products`** | INIU page |
 | Channel mapping & presence: retailer_product_code→SKU, status, first_seen/last_seen/is_active | **`first_pass_observations`** / **`listings`** | First Pass / Reviews |
 | Competitor price history | **`price_snapshots`** | not hand-edited (from scrapes) |
@@ -94,6 +94,16 @@ Every field has ONE home table. Every view JOINs to the home; editing writes the
 > (home, INIU, Roadmap) filter these pairs out. A "Show hidden (N)" toggle un-hides. This is the
 > durable analog of the old local dashboard, whose only *persistent* competitor removal edited the
 > INIU spec xlsx directly (its cosmetic "exclude" toggle stored nothing). See MEMORY.md → hide.
+
+> Power on the charger Dashboard is editable in place, and the write follows the contract rather
+> than bypassing it: a **mapped** row writes `products.wired_power` (the Library, so it propagates
+> everywhere), an **unmapped** row has no library entry to edit and writes the raw fallback
+> `first_pass_observations.power` **plus `power_manual = true`**. That flag exists because
+> `map_cycle` fills the column with `coalesce(scraped, existing)` — without it, the next scrape
+> reading any wattage, including a wrong one, would silently replace what a person typed. With it,
+> `map_cycle` leaves the value alone (verified by a rolled-back test: a manual `999 W` survived a
+> cycle carrying `7 W`, while an unflagged row updated as before). Once the listing is mapped via
+> /reviews the Library value takes over on read. Admin-only; audited. See `charger-power-actions.ts`.
 
 > DONE (2026-07-08): the First Pass page no longer displays `first_pass_observations`'s own
 > (frozen, legacy) spec columns. It resolves each row to its canonical `products` row the same way
