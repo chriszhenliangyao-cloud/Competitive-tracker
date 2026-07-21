@@ -13,7 +13,7 @@
 // and no charger word precedes it.
 
 export type TierKey =
-  | "wall_lo" | "wall_hi"
+  | "wall_45" | "wall_65" | "wall_100" | "wall_150" | "wall_max" | "wall_unknown"
   | "car"
   | "desk_lo" | "desk_hi"
   | "wireless"
@@ -22,8 +22,18 @@ export type TierKey =
 export type Tier = { key: TierKey; label: string; sub: string };
 
 export const CHARGER_TIERS: Tier[] = [
-  { key: "wall_lo",  label: "Wall ≤100W",    sub: "Phone / fast charge" },
-  { key: "wall_hi",  label: "Wall >100W",    sub: "Laptop / multi-device" },
+  // Wall is the bulk of the category, so it carries the full power ladder.
+  // The other form factors stay single/coarse: car is 19/32 under 45W and
+  // wireless 49/55, so splitting them the same way would be ~20 empty sections.
+  { key: "wall_45",      label: "Wall <45W",       sub: "Phone / tablet" },
+  { key: "wall_65",      label: "Wall 45–65W",     sub: "Fast charge / ultrabook" },
+  { key: "wall_100",     label: "Wall 65–100W",    sub: "Laptop" },
+  { key: "wall_150",     label: "Wall 100–150W",   sub: "Multi-device" },
+  { key: "wall_max",     label: "Wall >150W",      sub: "High-power multi-port" },
+  // Not folded into <45W: that would assert a wattage we never read. These are
+  // listings whose page stated no power — they move into a band once a scrape
+  // picks one up.
+  { key: "wall_unknown", label: "Wall · W unknown", sub: "No power on the page" },
   { key: "car",      label: "Car",           sub: "All wattages" },
   { key: "desk_lo",  label: "Desktop ≤200W", sub: "Desk hub" },
   { key: "desk_hi",  label: "Desktop >200W", sub: "High-power station" },
@@ -96,6 +106,13 @@ export function tierOf(name: string | null | undefined, power: string | null | u
   // 4. Desktop / station, split at 200W.
   if (DESK_WORD.test(n)) return (w ?? 0) > 200 ? "desk_hi" : "desk_lo";
 
-  // 5. Everything else is a wall charger, split at 100W.
-  return (w ?? 0) > 100 ? "wall_hi" : "wall_lo";
+  // 5. Everything else is a wall charger, on the full power ladder.
+  //    Boundaries are inclusive upward: 45W sits in 45–65, 65W in 45–65,
+  //    100W in 65–100, 150W in 100–150.
+  if (w == null) return "wall_unknown";
+  if (w < 45) return "wall_45";
+  if (w <= 65) return "wall_65";
+  if (w <= 100) return "wall_100";
+  if (w <= 150) return "wall_150";
+  return "wall_max";
 }
