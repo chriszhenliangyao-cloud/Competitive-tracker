@@ -373,8 +373,28 @@ its last local artefacts are from 2026-05-14.
 - **71 charger scrape targets** seeded in `brand_retailer_targets` (house brands whitelisted to their
   single retailer, real brands across all 13), all `is_enabled=false` so nothing scrapes until a
   deliberate smoke test. Powerbank's 53 targets untouched.
-- **Next**: enable 1–2 charger targets → smoke-test `run_scrape_raw.py --category charger` → check
-  SKU extraction rate → enable the rest. Then charger-specific views (matrix axis = power W × price).
+- **CORRECTION**: I first reported the charger line had "never been run end-to-end, only 2026-05
+  artefacts". That was WRONG — I globbed `output/channel_mapped/*.xlsx` but the files live in
+  `channel_mapped/<retailer>/<brand>/`, so the glob found nothing. There are in fact **28 mapped files
+  across 10 retailers, dated 2026-06-12 and 2026-06-15**, and SKU extraction works fine there
+  (e.g. belkin `WCH010VFBK`, `WCA003VFWH`). Always check for nested layouts before concluding a
+  pipeline never ran.
+- **Charger channel history imported** via `cloud/pipeline/import_charger_history.py` — deliberately
+  through the SAME Model-B path a live scrape uses (`xlsx → raw_scrape_rows(category_key='charger')
+  → rpc map_cycle`), NOT by writing listings directly, so identity resolution, the review queue and
+  delist detection behave exactly as they do for powerbanks. One import_run per scrape date so both
+  dates stay distinct and the dashboard shows a trend:
+  - 2026-06-12 (run 5): 147 rows → mapped 35, new_listing 112, library_missing 0, delisted 0
+  - 2026-06-15 (run 6): 278 rows → mapped 82, new_listing 196, library_missing 0, delisted 0
+  - Result: **425 charger listings / 425 price snapshots / 10 retailers / 420 first_pass**, two price
+    dates. Retailer-code coverage was 96% / 100%, which is what the memory cascade needs; the ~73%
+    without a SKU became new_listing for review, exactly as the no-fuzzy rule requires.
+  - Powerbank verified untouched: 1041 listings / 5518 prices / 547 products, before and after.
+  - Pending reviews 357 → 665 (+308 charger). These are the code→SKU decisions to work through in
+    `/reviews` with the Chargers tab selected; once resolved they auto-map every future cycle.
+- **Next**: charger-specific views (matrix axis = power W × price, not capacity), and when a fresh
+  charger scrape is wanted, enable targets in `brand_retailer_targets` (all 71 are currently disabled)
+  and run `run_scrape_raw.py --category charger`.
 
 ## Data-quality notes
 - **Review de-duplication (2026-07-07)**: `mapping_reviews` had grown to 867 pending rows but only
