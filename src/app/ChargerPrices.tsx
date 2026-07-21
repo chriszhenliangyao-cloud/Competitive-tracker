@@ -10,10 +10,23 @@ import type { ChargerDashboardData, ChargerOffer, ChargerProduct, ChargerSection
 // split by wattage) instead of by INIU product, because there are no INIU
 // chargers to anchor on. Same row/week layout as Prices by Country.
 
+/** How many trailing ISO weeks get their own price column. */
+const WEEK_COLS = 6;
+
 export default function ChargerPrices({ data }: { data: ChargerDashboardData }) {
   const [country, setCountry] = useState("");
   const [segment, setSegment] = useState("");
   const { sections, countries, stats } = data;
+
+  // Week columns are computed ONCE over every date in the dataset, not per
+  // product: a product only scraped in some weeks would otherwise get its own
+  // narrower column set and the prices would no longer line up down the table.
+  // A row with nothing that week shows "—".
+  const weeks = useMemo(() => {
+    const all = new Set<string>();
+    for (const s of sections) for (const p of s.products) for (const d of p.dates) all.add(d);
+    return groupWeeks([...all].sort()).slice(-WEEK_COLS);
+  }, [sections]);
 
   const inC = (r: ChargerOffer) => !country || r.country === country;
 
@@ -78,13 +91,23 @@ export default function ChargerPrices({ data }: { data: ChargerDashboardData }) 
           <div className="empty">No chargers match these filters.</div>
         </div>
       ) : (
-        visible.map((s) => <Section key={s.key} section={s} inC={inC} />)
+        visible.map((s) => <Section key={s.key} section={s} inC={inC} weeks={weeks} />)
       )}
     </>
   );
 }
 
-function Section({ section, inC }: { section: ChargerSection; inC: (r: ChargerOffer) => boolean }) {
+type Week = { key: string; label: string; dates: string[] };
+
+function Section({
+  section,
+  inC,
+  weeks,
+}: {
+  section: ChargerSection;
+  inC: (r: ChargerOffer) => boolean;
+  weeks: Week[];
+}) {
   if (section.products.length === 0) return null;
   return (
     <section className="table-panel">
@@ -103,12 +126,16 @@ function Section({ section, inC }: { section: ChargerSection; inC: (r: ChargerOf
               <th>Product</th>
               <th>Power</th>
               <th>Retailer</th>
-              <th>Price history (EUR)</th>
+              {weeks.map((w) => (
+                <th key={w.key} title={w.dates.join(", ")} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  {w.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {section.products.map((p) => (
-              <ProductRows key={p.key} product={p} inC={inC} />
+              <ProductRows key={p.key} product={p} inC={inC} weeks={weeks} />
             ))}
           </tbody>
         </table>
@@ -117,10 +144,17 @@ function Section({ section, inC }: { section: ChargerSection; inC: (r: ChargerOf
   );
 }
 
-function ProductRows({ product, inC }: { product: ChargerProduct; inC: (r: ChargerOffer) => boolean }) {
+function ProductRows({
+  product,
+  inC,
+  weeks,
+}: {
+  product: ChargerProduct;
+  inC: (r: ChargerOffer) => boolean;
+  weeks: Week[];
+}) {
   const rows = product.rows.filter(inC);
   if (rows.length === 0) return null;
-  const weeks = groupWeeks(product.dates).slice(-4);
   // price for a week = value at the latest date in that week the row has
   const weekVal = (row: ChargerOffer, w: { dates: string[] }): number | null => {
     for (let i = w.dates.length - 1; i >= 0; i--) {
@@ -167,22 +201,21 @@ function ProductRows({ product, inC }: { product: ChargerProduct; inC: (r: Charg
               {r.onPromo ? <span className="fp-src lib">promo</span> : null}
             </div>
           </td>
-          <td>
-            <div style={{ display: "flex", gap: 10 }}>
-              {weeks.map((w, wi) => {
-                const v = weekVal(r, w);
-                const prev = wi > 0 ? weekVal(r, weeks[wi - 1]) : null;
-                let cls = "";
-                if (v != null && prev != null && v !== prev) cls = v > prev ? "chg-up" : "chg-down";
-                return (
-                  <div key={w.key} title={w.dates.join(", ")} style={{ textAlign: "right", minWidth: 52 }}>
-                    <div style={{ fontSize: 10, color: "#9aa6ae" }}>{w.label}</div>
-                    <div className={cls}>{v != null ? fmtEUR(v) : "—"}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </td>
+          {weeks.map((w, wi) => {
+            const v = weekVal(r, w);
+            // Compare against the most recent EARLIER week that has a price, not
+            // the adjacent column — with gaps, the neighbour is often empty and
+            // a real price change would render as unchanged.
+            let prev: number | null = null;
+            for (let k = wi - 1; k >= 0 && prev == null; k--) prev = weekVal(r, weeks[k]);
+            let cls = "";
+            if (v != null && prev != null && v !== prev) cls = v > prev ? "chg-up" : "chg-down";
+            return (
+              <td key={w.key} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                {v != null ? <span className={cls}>{fmtEUR(v)}</span> : <span className="muted">—</span>}
+              </td>
+            );
+          })}
         </tr>
       ))}
     </>
