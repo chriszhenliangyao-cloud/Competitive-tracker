@@ -28,8 +28,11 @@ export const USERS: Record<string, AppUser> = {
   "chris.yao@iniushop.com": { role: "admin", countries: null, canEdit: true },
   "julio.pu@iniushop.com": { role: "admin", countries: null },
   "jiwen.wang@iniushop.com": { role: "admin", countries: null },
-  // external (Bueno Tech) — full visibility, no catalogue-data editing
-  "kevin.xiao@bueno-tech2025.com": { role: "admin", countries: null },
+  // Kevin Xiao (Bueno Tech, external) — full visibility, no catalogue-data editing.
+  // His work address kevin.xiao@bueno-tech2025.com has no Google account behind it
+  // ("couldn't find your Google Account"), and sign-in here is Google-only, so the
+  // entry has to be the Gmail he actually signs in with.
+  "shawkalent@gmail.com": { role: "admin", countries: null },
   "victor.rosiere@iniushop.com": { role: "sales", countries: ["FR"] },
   "juan.cabrera@iniushop.com": { role: "sales", countries: ["ES"] },
   "slawomir.stanik@iniushop.com": { role: "sales", countries: ["PL"] },
