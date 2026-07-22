@@ -33,6 +33,11 @@ export const USERS: Record<string, AppUser> = {
   // ("couldn't find your Google Account"), and sign-in here is Google-only, so the
   // entry has to be the Gmail he actually signs in with.
   "shawkalent@gmail.com": { role: "admin", countries: null },
+  // Chris's personal Gmail — here to reproduce the external-account sign-in path
+  // (outside iniushop.com, Google chooser, allow-list) exactly as Kevin sees it.
+  // Deliberately WITHOUT canEdit, so the test matches his permissions rather than
+  // Chris's. Remove once that path is confirmed.
+  "chriszhenliang.yao@gmail.com": { role: "admin", countries: null },
   "victor.rosiere@iniushop.com": { role: "sales", countries: ["FR"] },
   "juan.cabrera@iniushop.com": { role: "sales", countries: ["ES"] },
   "slawomir.stanik@iniushop.com": { role: "sales", countries: ["PL"] },
