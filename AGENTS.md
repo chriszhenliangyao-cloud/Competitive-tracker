@@ -50,6 +50,19 @@ local Python scraping + dashboard system. Read this file **and `MEMORY.md`** bef
   `products` with an **`updated_at` optimistic lock** (a stale edit is rejected, not clobbered) and
   logs before/after to **`audit_events`**; it only touches spec fields (never sku/sku_key/brand
   identity or image_url). Editable fields propagate to every JOINing view via `revalidatePath`.
+- **Google OAuth client is this app's OWN** (Google Cloud project `Competitive Tracking`, consent
+  screen **External + published**, app name shown to users = "INIU Competitive Tracker"). It used to
+  share the ERP's client, whose consent screen is **Internal** — Google itself then rejected every
+  non-iniushop.com account with `403 org_internal`, before the allow-list was ever consulted, and the
+  consent page read "continue to EMEA-ERP" on this site. Do NOT point this app back at the ERP client,
+  and do NOT switch the ERP's client to External to "fix" it: **the ERP has no email allow-list** — its
+  middleware admits any authenticated user — so that Internal setting is the only thing keeping
+  strangers out of it. Redirect URI on the client is `https://upoyfwfglymcubsuopfn.supabase.co/auth/v1/callback`
+  (Supabase's domain, never the Vercel one), swapped into Supabase → Auth → Providers → Google.
+- **No `hd` hint on the login button.** It only filtered Google's account chooser to one domain, which
+  made allow-listed outside accounts unable to pick themselves. Removing it weakens nothing: the gate
+  is the exact-match email list. Consequence: Google now lets ANY account authenticate, so a stranger
+  can end up as a row in `auth.users` — with zero access, since middleware rejects them on every route.
 - **Auth + RBAC** (Google login, `src/lib/access.ts` is the single source of truth):
   - `USERS` maps each of the 7 allowed emails → `{role, countries}`. `ALLOWED_EMAILS` is derived
     from its keys. `role: "admin"` → `countries: null` (sees all); `role: "sales"` → country-scoped
