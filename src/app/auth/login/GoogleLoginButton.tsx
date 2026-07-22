@@ -13,7 +13,13 @@ export default function GoogleLoginButton() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: { hd: "iniushop.com", prompt: "select_account" },
+        // No `hd` hint: it filters Google's account chooser to one domain, and
+        // an allow-listed address outside iniushop.com could then never pick its
+        // own account. Dropping it costs nothing — `hd` was only ever a chooser
+        // filter, never a check. The gate is the ALLOWED_EMAILS list in
+        // lib/access.ts plus middleware, which reject anyone not listed however
+        // they signed in.
+        queryParams: { prompt: "select_account" },
       },
     });
   };

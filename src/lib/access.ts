@@ -1,7 +1,12 @@
 // Single source of truth for who may use the app AND what they may see.
-// Only these exact accounts pass — a valid @iniushop.com address NOT listed
-// here is still rejected. To grant/revoke access or change a country: edit this
-// map and push.
+// Only these exact accounts pass — the gate is this list, NOT the email domain,
+// so an @iniushop.com address that isn't listed is rejected and an outside
+// address that is listed gets in. To grant/revoke access or change a country:
+// edit this map and push.
+//
+// Adding an address outside iniushop.com also needs the `hd` hint dropped from
+// the Google button (see auth/login/GoogleLoginButton.tsx) — with it set,
+// Google's account chooser never offers them their own account.
 //
 // role "admin"  → sees every country (countries: null).
 // role "sales"  → country-scoped: on Dashboard / Channel / Roadmap they only see
@@ -23,6 +28,8 @@ export const USERS: Record<string, AppUser> = {
   "chris.yao@iniushop.com": { role: "admin", countries: null, canEdit: true },
   "julio.pu@iniushop.com": { role: "admin", countries: null },
   "jiwen.wang@iniushop.com": { role: "admin", countries: null },
+  // external (Bueno Tech) — full visibility, no catalogue-data editing
+  "kevin.xiao@bueno-tech2025.com": { role: "admin", countries: null },
   "victor.rosiere@iniushop.com": { role: "sales", countries: ["FR"] },
   "juan.cabrera@iniushop.com": { role: "sales", countries: ["ES"] },
   "slawomir.stanik@iniushop.com": { role: "sales", countries: ["PL"] },
